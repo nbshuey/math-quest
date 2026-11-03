@@ -18,6 +18,8 @@ function normalizeProfile(p) {
     buddy: 'cat',
     hat: 'none',
     theme: 'sunny',
+    autoRead: false,
+    easyRead: false,
     ...p,
     owned: { buddies: [], hats: [], themes: [], ...p.owned },
   };

@@ -2,6 +2,7 @@ import { TOPICS, GRADES, LEVELS } from './problems.js';
 import { BUDDIES, HATS, THEMES, CATALOG } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
+import { speak, stopSpeaking, choiceWords, canSpeak } from './speech.js';
 
 const QUESTIONS_PER_ROUND = 10;
 const AVATARS = ['🦊', '🐼', '🐯', '🦄', '🐸', '🐙', '🦖', '🐧', '🐵', '🦁', '🐨', '🚀'];
@@ -27,10 +28,20 @@ const levelOf = (p) => LEVELS.find((l) => l.id === p.level) ?? LEVELS[1];
 const owns = (p, tab, item) => item.price === 0 || p.owned[tab].includes(item.id);
 const starRow = (n, max = 3) =>
   `<span class="stars">${Array.from({ length: max }, (_, i) => `<span class="${i < n ? '' : 'off'}">★</span>`).join('')}</span>`;
+const buddyName = (p) => buddyOf(p).name.split(' ')[0];
+const sayButton = (id, label = 'Read aloud') => (canSpeak ? `<button class="say-btn" data-say="${id}" aria-label="${label}">🔊</button>` : '');
+const shuffle = (arr) => [...arr].map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 
 function show(html) {
+  stopSpeaking();
   app.innerHTML = html;
   window.scrollTo(0, 0);
+}
+
+// The player's theme and reading settings (or the defaults on the home screen).
+function applyLook(p) {
+  applyTheme(p?.theme ?? 'sunny');
+  document.body.classList.toggle('easy-read', !!p?.easyRead);
 }
 
 function on(selector, handler) {
@@ -55,7 +66,12 @@ function buddyHtml(p, size = '') {
 }
 
 function buddyRow(p, text) {
-  return `<div class="buddy-row">${buddyHtml(p)}<div class="bubble" id="bubble">${esc(text)}</div></div>`;
+  return `<div class="buddy-row">${buddyHtml(p)}<button class="bubble" id="bubble" title="Tap to hear">${esc(text)}</button></div>`;
+}
+
+// Tapping the buddy's speech bubble reads it aloud.
+function bindBubble() {
+  on('#bubble', (el) => speak(el.textContent));
 }
 
 // Make the buddy say something, with a little hop (happy) or wobble (sad).
@@ -86,7 +102,7 @@ function bindSound() {
 
 function renderHome() {
   session = null;
-  applyTheme('sunny');
+  applyLook(null);
   const cards = state.profiles
     .map(
       (p) => `
@@ -127,7 +143,7 @@ function renderHome() {
 
 function renderEdit(id) {
   const existing = state.profiles.find((p) => p.id === id);
-  const draft = existing ? { ...existing } : { name: '', grade: GRADES[0], avatar: pick(AVATARS) };
+  const draft = existing ? { ...existing } : { name: '', grade: GRADES[0], avatar: pick(AVATARS), autoRead: false, easyRead: false };
 
   show(`
     <div class="screen">
@@ -144,6 +160,11 @@ function renderEdit(id) {
         <div class="grade-row">
           ${GRADES.map((g) => `<button class="grade-opt ${g === draft.grade ? 'selected' : ''}" data-grade="${g}">Grade ${g}</button>`).join('')}
         </div>
+        <div class="field-label">Reading help</div>
+        <div class="toggle-list">
+          ${canSpeak ? `<button class="toggle-opt ${draft.autoRead ? 'selected' : ''}" data-toggle="autoRead"><span class="check"></span>🔊 Read questions out loud</button>` : ''}
+          <button class="toggle-opt ${draft.easyRead ? 'selected' : ''}" data-toggle="easyRead"><span class="check"></span>🔤 Easy-reading text (bigger, spaced out, calmer)</button>
+        </div>
         <div class="panel-actions">
           ${existing && state.profiles.length > 1 ? '<button class="btn danger" data-action="delete">Delete</button>' : ''}
           <button class="btn" data-action="save">Save</button>
@@ -159,6 +180,11 @@ function renderEdit(id) {
     draft.grade = Number(el.dataset.grade);
     app.querySelectorAll('[data-grade]').forEach((b) => b.classList.toggle('selected', b === el));
   });
+  on('[data-toggle]', (el) => {
+    const key = el.dataset.toggle;
+    draft[key] = !draft[key];
+    el.classList.toggle('selected', draft[key]);
+  });
   on('[data-action="back"]', renderHome);
   on('[data-action="delete"]', () => {
     if (!confirm(`Delete ${existing.name}? Their stars, coins and shop items will be gone.`)) return;
@@ -168,8 +194,9 @@ function renderEdit(id) {
   });
   on('[data-action="save"]', () => {
     const name = app.querySelector('#name').value.trim() || 'Player';
-    if (existing) Object.assign(existing, { name, grade: draft.grade, avatar: draft.avatar });
-    else state.profiles.push(makeProfile(name, draft.grade, draft.avatar));
+    const reading = { autoRead: !!draft.autoRead, easyRead: !!draft.easyRead };
+    if (existing) Object.assign(existing, { name, grade: draft.grade, avatar: draft.avatar, ...reading });
+    else state.profiles.push({ ...makeProfile(name, draft.grade, draft.avatar), ...reading });
     save();
     renderHome();
   });
@@ -190,7 +217,7 @@ function playerBar(p, backAction = 'back') {
 function renderTopics() {
   const p = currentProfile();
   if (!p) return renderHome();
-  applyTheme(p.theme);
+  applyLook(p);
   const cards = TOPICS[p.grade]
     .map(
       (t) => `
@@ -219,6 +246,7 @@ function renderTopics() {
     </div>`);
 
   bindSound();
+  bindBubble();
   on('[data-action="back"]', renderHome);
   on('[data-action="shop"]', () => renderShop());
   on('[data-level]', (el) => {
@@ -234,7 +262,7 @@ function renderTopics() {
 
 function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should we get?') {
   const p = currentProfile();
-  applyTheme(p.theme);
+  applyLook(p);
   const { items, slot } = CATALOG[tab];
 
   const cards = items
@@ -267,6 +295,7 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
     </div>`);
 
   bindSound();
+  bindBubble();
   on('[data-action="back"]', renderTopics);
   on('[data-tab]', (el) => renderShop(el.dataset.tab));
   on('[data-use]', (el) => {
@@ -301,10 +330,16 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
 
 /* ---------------------------- Playing ---------------------------- */
 
+// "How do you know?" comes up on these questions (or the next one answered right on the first try).
+const WHY_AT = [2, 5, 8];
+
 function startRound(topicId) {
   const p = currentProfile();
   const topic = TOPICS[p.grade].find((t) => t.id === topicId);
-  session = { topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0, missed: [], seen: new Set() };
+  session = {
+    topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0,
+  };
   loadQuestion();
 }
 
@@ -315,6 +350,9 @@ function loadQuestion() {
   do q = session.topic.gen(session.level);
   while (session.seen.has(q.summary ?? q.prompt) && tries++ < 25);
   session.seen.add(q.summary ?? q.prompt);
+  const name = buddyName(currentProfile());
+  for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
+  if (WHY_AT.includes(session.index)) session.whyDue = true;
   Object.assign(session, { current: q, attempts: 0, locked: false, input: '' });
   renderQuestion();
 }
@@ -325,19 +363,36 @@ function nextQuestion() {
   else loadQuestion();
 }
 
+// Everything on the question card, as words to read aloud.
+function questionSpeech(q) {
+  const name = buddyName(currentProfile());
+  const parts = [q.prompt];
+  const summary = q.claim !== undefined ? q.baseSummary : q.summary;
+  if (q.visual && summary) parts.push(summary);
+  if (q.claim !== undefined) parts.push(`${name} says ${choiceWords(q.claim)}. Is ${name} right?`);
+  else if (q.choices) parts.push(`Is it ${q.choices.map(choiceWords).join(', or ')}?`);
+  return parts.join('. ').replace(/\?\./g, '?');
+}
+
 function renderQuestion() {
   const p = currentProfile();
   const q = session.current;
   const pct = (session.index / QUESTIONS_PER_ROUND) * 100;
   const input = q.choices
-    ? `<div class="choices">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
+    ? `<div class="choices ${q.claim !== undefined ? 'two' : ''}">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
     : `<div class="numpad">
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button data-key="${n}">${n}</button>`).join('')}
         <button data-key="back" aria-label="Delete">⌫</button>
         <button data-key="0">0</button>
         <button data-key="enter" class="go" aria-label="Check answer">✓</button>
       </div>`;
-  const greeting = session.index === 0 ? pick(GREETINGS) : session.streak >= 3 ? `${session.streak} in a row! 🔥` : pick(GREETINGS);
+  const greeting = q.claim !== undefined
+    ? 'I tried this one. Did I get it right?'
+    : session.streak >= 3 ? `${session.streak} in a row! 🔥` : pick(GREETINGS);
+  const claim = q.claim !== undefined
+    ? `<div class="claim">${buddyOf(p).emoji} <span>${esc(buddyName(p))} says: <strong>${esc(q.claim)}</strong></span></div>
+       <div class="claim-ask">Is ${esc(buddyName(p))} right?</div>`
+    : '';
 
   show(`
     <div class="screen play">
@@ -348,20 +403,25 @@ function renderQuestion() {
       </div>
       ${buddyRow(p, greeting)}
       <div class="question" id="question">
+        ${sayButton('question', 'Read the question aloud')}
         <div class="q-count">${session.topic.emoji} Question ${session.index + 1} of ${QUESTIONS_PER_ROUND} · ${levelOf(p).emoji} ${levelOf(p).name}</div>
         <div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>
         ${q.visual ? `<div class="visual">${q.visual}</div>` : ''}
+        ${claim}
         ${q.choices ? '' : '<div class="answer-display" id="answer">&nbsp;</div>'}
         <div class="feedback" id="feedback"></div>
-        <div class="hint hidden" id="hint">💡 ${esc(q.hint)}</div>
+        <div class="hint hidden" id="hint">💡 <span>${esc(q.hint)}</span> ${sayButton('hint', 'Read the hint aloud')}</div>
       </div>
-      ${input}
+      <div id="input-area">${input}</div>
       <div class="play-actions">
-        <button class="btn secondary" data-action="hint">💡 Hint</button>
+        <button class="btn secondary" data-action="hint" id="hintBtn">💡 Hint</button>
         <button class="btn hidden" data-action="next" id="next">Next ➜</button>
       </div>
     </div>`);
 
+  bindBubble();
+  on('[data-say="question"]', () => speak(questionSpeech(q)));
+  on('[data-say="hint"]', () => speak(q.hint));
   on('[data-key]', (el) => pressKey(el.dataset.key));
   on('[data-choice]', (el) => submit(el.dataset.choice, el));
   on('[data-action="hint"]', showHint);
@@ -369,6 +429,7 @@ function renderQuestion() {
   on('[data-action="quit"]', () => {
     if (confirm('Quit this quest? Your progress in this round will be lost.')) renderTopics();
   });
+  if (p.autoRead) speak(questionSpeech(q));
 }
 
 function pressKey(key) {
@@ -380,7 +441,10 @@ function pressKey(key) {
 }
 
 function showHint() {
-  app.querySelector('#hint').classList.remove('hidden');
+  const hint = app.querySelector('#hint');
+  if (!hint.classList.contains('hidden')) return;
+  hint.classList.remove('hidden');
+  if (currentProfile().autoRead) speak(session.current.hint);
 }
 
 function setFeedback(kind, text) {
@@ -408,7 +472,13 @@ function submit(value, choiceEl) {
     sounds.correct();
     confetti(session.streak >= 3 ? 60 : 30);
     const s = session;
-    setTimeout(() => session === s && nextQuestion(), 1300);
+    const askWhy = q.why && (q.alwaysWhy || (session.attempts === 0 && session.whyDue));
+    if (askWhy) {
+      session.whyDue = false;
+      setTimeout(() => session === s && showWhy(q), 900);
+    } else {
+      setTimeout(() => session === s && nextQuestion(), 1300);
+    }
     return;
   }
 
@@ -445,16 +515,67 @@ function submit(value, choiceEl) {
   app.querySelector('#next').classList.remove('hidden');
 }
 
+// "How do you know?": pick the explanation that matches the thinking.
+function showWhy(q) {
+  const p = currentProfile();
+  const ask = q.whyAsk ?? 'How do you know?';
+  const options = shuffle([{ text: q.why.right, right: true }, ...q.why.wrong.map((text) => ({ text }))]);
+  session.whyAsked++;
+
+  app.querySelector('#hintBtn').classList.add('hidden');
+  app.querySelector('#hint').classList.add('hidden');
+  app.querySelector('#input-area').innerHTML = `
+    <div class="why">
+      <div class="why-ask">🧠 ${esc(ask)} ${sayButton('why', 'Read the choices aloud')}</div>
+      ${q.why.visual && !q.visual?.includes(q.why.visual) ? `<div class="visual why-visual">${q.why.visual}</div>` : ''}
+      <div class="why-options">
+        ${options.map((o, i) => `
+          <div class="why-row">
+            <button class="why-opt" data-why="${i}"><span class="why-letter">${'ABC'[i]}</span><span>${esc(o.text)}</span></button>
+            ${sayButton(`why-${i}`, `Read choice ${'ABC'[i]} aloud`)}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  say(ask, 'happy');
+
+  const allChoices = `${ask} ${options.map((o, i) => `${'ABC'[i]}: ${o.text}`).join(' ')}`;
+  on('[data-say="why"]', () => speak(allChoices));
+  options.forEach((o, i) => on(`[data-say="why-${i}"]`, () => speak(o.text)));
+  on('[data-why]', (el) => {
+    if (session.whyDone) return;
+    session.whyDone = true;
+    const chosen = options[Number(el.dataset.why)];
+    app.querySelectorAll('[data-why]').forEach((b) => {
+      b.disabled = true;
+      if (options[Number(b.dataset.why)].right) b.classList.add('right');
+    });
+    if (chosen.right) {
+      session.whyRight++;
+      sounds.correct();
+      confetti(40);
+      say('Great thinking! 🧠 Bonus coins!', 'happy');
+    } else {
+      el.classList.add('wrong');
+      sounds.wrong();
+      say("Here's the right thinking. Let's read it together.", 'sad');
+      if (p.autoRead) speak(q.why.right);
+    }
+    app.querySelector('#next').classList.remove('hidden');
+  });
+  session.whyDone = false;
+  if (p.autoRead) speak(allChoices);
+}
+
 /* ---------------------------- Results ---------------------------- */
 
 function finishRound() {
   const p = currentProfile();
-  const { topic, level, firstTry, bestStreak, missed } = session;
+  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight } = session;
   const stars = firstTry >= 9 ? 3 : firstTry >= 7 ? 2 : firstTry >= 5 ? 1 : 0;
   const key = `${topic.id}:${level}`;
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
-  const earned = firstTry * level;
+  const earned = (firstTry + whyRight) * level;
   p.coins += earned;
   save();
 
@@ -477,6 +598,7 @@ function finishRound() {
         <div class="big-stars">${starRow(stars)}</div>
         ${newBest ? '<div class="badge">New best!</div>' : ''}
         <p class="result-line">You got <strong>${firstTry} of ${QUESTIONS_PER_ROUND}</strong> on the first try.</p>
+        ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${
           missed.length
@@ -493,7 +615,9 @@ function finishRound() {
       </div>
     </div>`);
 
+  bindBubble();
   say(buddyLine, 'happy');
+  if (p.autoRead) speak(`${message} You got ${firstTry} of ${QUESTIONS_PER_ROUND} on the first try. ${buddyLine}`);
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="topics"]', renderTopics);
   on('[data-action="again"]', () => startRound(topic.id));

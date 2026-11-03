@@ -171,6 +171,37 @@ button {
 .grade-opt { background: var(--soft); border-radius: 14px; padding: 8px 18px; font-weight: 800; font-size: 1.15rem; border: 3px solid transparent; }
 .avatar-opt.selected, .grade-opt.selected { border-color: var(--primary); background: #fff; }
 .panel-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; flex-wrap: wrap; }
+.toggle-list { display: flex; flex-direction: column; gap: 8px; }
+.toggle-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--soft);
+  border: 3px solid transparent;
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.toggle-opt .check { width: 26px; height: 26px; border-radius: 8px; border: 3px solid var(--soft-edge); background: #fff; flex-shrink: 0; }
+.toggle-opt.selected { border-color: var(--primary); background: #fff; }
+.toggle-opt.selected .check { background: var(--primary); border-color: var(--primary); box-shadow: inset 0 0 0 3px #fff; }
+
+/* ----- Easy-reading mode (dyslexia-friendly) ----- */
+
+body.easy-read {
+  --card: #fffdf6;
+  font-family: 'Lexend', 'Baloo 2', system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  word-spacing: 0.14em;
+}
+body.easy-read #decor { display: none; }
+body.easy-read .prompt { line-height: 1.4; }
+body.easy-read .prompt.word { font-size: clamp(1.4rem, 4.2vw, 1.9rem); font-weight: 600; text-align: left; max-width: 34ch; margin: 8px auto; }
+body.easy-read .hint, body.easy-read .bubble, body.easy-read .why-opt, body.easy-read .topic-desc { line-height: 1.6; }
+body.easy-read .hint { text-align: left; font-size: 1.2rem; }
+body.easy-read .why-opt { font-size: 1.25rem; font-weight: 400; }
 
 /* ----- Buddy ----- */
 
@@ -182,6 +213,7 @@ button {
 .buddy.sad { animation: wobble 0.5s; }
 .bubble {
   position: relative;
+  text-align: left;
   background: #fff;
   color: var(--ink);
   border-radius: 18px;
@@ -302,7 +334,118 @@ button {
 .progress > div { height: 100%; background: linear-gradient(90deg, var(--primary), var(--good)); border-radius: 99px; transition: width 0.4s; }
 .streak { color: var(--on-bg); font-weight: 800; font-size: 1.4rem; min-width: 56px; text-align: right; }
 
-.question { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); text-align: center; }
+.question { position: relative; background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); text-align: center; }
+.question > .say-btn { position: absolute; top: 12px; right: 12px; }
+
+.say-btn {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--soft);
+  font-size: 1.25rem;
+  box-shadow: 0 3px 0 var(--soft-edge);
+}
+.say-btn:active { transform: translateY(2px); box-shadow: none; }
+.hint .say-btn { width: 36px; height: 36px; font-size: 1rem; vertical-align: middle; margin-left: 4px; background: #fff; }
+
+/* ----- Fix the Mistake ----- */
+
+.claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff4e6;
+  border: 3px dashed var(--gold);
+  border-radius: 16px;
+  padding: 6px 16px;
+  margin-top: 8px;
+  font-size: 1.4rem;
+}
+.claim strong { font-size: 1.8rem; }
+.claim-ask { font-weight: 800; font-size: 1.3rem; margin-top: 6px; }
+.choices.two { max-width: 440px; }
+
+/* ----- How do you know? ----- */
+
+.why { background: var(--card); border-radius: var(--radius); padding: 16px; margin-top: 16px; box-shadow: var(--shadow); }
+.why-ask { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1.6rem; font-weight: 800; }
+.why-visual { display: flex; justify-content: center; }
+.why-options { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.why-row { display: flex; align-items: center; gap: 8px; }
+.why-opt {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border: 3px solid var(--soft-edge);
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.why-opt:not(:disabled):hover { border-color: var(--primary); }
+.why-opt.right { background: #e6fcf5; border-color: var(--good); }
+.why-opt.wrong { background: #fff0f0; border-color: var(--bad); }
+.why-opt:disabled { cursor: default; color: var(--ink); }
+.why-letter {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.why-opt.right .why-letter { background: var(--good); }
+.why-opt.wrong .why-letter { background: var(--bad); }
+
+/* Area model for multiplication */
+.area { display: flex; align-items: stretch; width: min(460px, 100%); margin: 6px auto; }
+.area-side { display: flex; align-items: center; padding-right: 8px; font-weight: 800; font-size: 1.3rem; }
+.area-cell {
+  display: flex;
+  flex-direction: column;
+  border: 3px solid var(--primary);
+  margin-left: -3px;
+  min-width: 70px;
+  background: #f3f0ff;
+}
+.area-top { background: var(--primary); color: #fff; font-weight: 800; padding: 2px 6px; }
+.area-val { padding: 10px 6px; font-weight: 800; font-size: 1.25rem; }
+
+/* Number line for rounding */
+.nline { width: min(460px, 100%); margin: 10px auto 4px; padding: 34px 12px 0; }
+.nline-track { position: relative; height: 6px; background: var(--ink); border-radius: 3px; }
+.nline-track::before, .nline-track::after, .nline-mid {
+  content: '';
+  position: absolute;
+  top: -8px;
+  width: 4px;
+  height: 22px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+.nline-track::before { left: 0; }
+.nline-track::after { right: 0; }
+.nline-mid { left: calc(50% - 2px); background: var(--muted); }
+.nline-dot {
+  position: absolute;
+  top: -7px;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.nline-dot b { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--bad); }
+.nline-labels { display: flex; justify-content: space-between; margin: 12px -12px 0; font-weight: 700; color: var(--muted); }
 .q-count { color: var(--muted); font-weight: 700; }
 .prompt { font-size: clamp(1.8rem, 6vw, 2.8rem); font-weight: 800; margin: 4px 0; line-height: 1.2; }
 .prompt.word { font-size: clamp(1.3rem, 4vw, 1.8rem); }
