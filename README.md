@@ -9,8 +9,10 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Grade 2**: addition & subtraction within 100 (including word problems), place value, skip counting, comparing numbers, counting coins
   - **Grade 4**: times tables to 12, multi-digit multiplication, division with remainders, equivalent fractions, comparing fractions (with fraction bars), rounding, place value to hundred-thousands
   - **Mixed Challenge** for each grade
+- **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
 - **Kid-friendly feedback**: a hint after the first miss, the answer shown after the second, and a review list at the end
-- **Rewards**: up to 3 stars per quest, coins for first-try answers, streaks 🔥, confetti and sounds
+- **Buddy & shop**: each player has a buddy who cheers them on. Coins buy new buddies (wizard, dragon, unicorn, robot…), hats, and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents.
+- **Rewards**: up to 3 stars per quest and level, coins for first-try answers (×1 / ×2 / ×3 by level), streaks 🔥, confetti and sounds
 - On-screen number pad (tablet friendly) plus keyboard support
 - Progress is saved in the browser (localStorage)
 
@@ -30,19 +32,24 @@ Then open http://localhost:5173.
 index.html        page shell
 css/styles.css    all styling
 js/app.js         screens, game loop, keyboard handling
-js/problems.js    problem generators per grade (add new topics here)
+js/problems.js    problem generators per grade and level (add new topics here)
+js/shop.js        buddies, hats and themes with their prices
 js/storage.js     saving profiles & progress
 js/effects.js     confetti and sound effects
 ```
 
 ### Adding a topic
 
-Write a generator in `js/problems.js` that returns `{ prompt, answer, hint }` (plus optional `choices`, `visual`, `summary`), then add it to the grade's list in `TOPICS`.
+Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ prompt, answer, hint }` (plus optional `choices`, `visual`, `summary`), then add it to the grade's list in `TOPICS`.
+
+### Adding shop items
+
+Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also needs a `body[data-theme='…']` block in `css/styles.css`.
 
 ## Ideas for later
 
 - Telling time (grade 2) and area & perimeter / angles (grade 4)
 - Timed "speed round" for times tables
-- A shop to spend coins on avatars or themes
+- Buddies that grow or evolve as kids earn stars
 - Parent dashboard showing which topics need practice
 - Adaptive difficulty based on recent answers

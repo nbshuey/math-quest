@@ -6,7 +6,28 @@ const newId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export function makeProfile(name, grade, avatar) {
-  return { id: newId(), name, grade, avatar, coins: 0, best: {} };
+  return normalizeProfile({ id: newId(), name, grade, avatar });
+}
+
+// Fills in fields added in later versions so older saves keep working.
+function normalizeProfile(p) {
+  const out = {
+    coins: 0,
+    best: {},
+    level: 2,
+    buddy: 'cat',
+    hat: 'none',
+    theme: 'sunny',
+    ...p,
+    owned: { buddies: [], hats: [], themes: [], ...p.owned },
+  };
+  // Stars used to be stored per topic; they're now per topic and level ("topic:level").
+  for (const [key, stars] of Object.entries(out.best)) {
+    if (key.includes(':')) continue;
+    out.best[`${key}:2`] = Math.max(out.best[`${key}:2`] || 0, stars);
+    delete out.best[key];
+  }
+  return out;
 }
 
 function defaultState() {
@@ -20,7 +41,11 @@ function defaultState() {
 export function loadState() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...defaultState(), ...JSON.parse(raw) };
+    if (raw) {
+      const state = { ...defaultState(), ...JSON.parse(raw) };
+      state.profiles = state.profiles.map(normalizeProfile);
+      return state;
+    }
   } catch {
     // Storage unavailable or corrupted: start fresh.
   }
