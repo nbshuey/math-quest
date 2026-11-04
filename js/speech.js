@@ -3,7 +3,7 @@
 const FRACTION_WORDS = {
   2: ['half', 'halves'], 3: ['third', 'thirds'], 4: ['fourth', 'fourths'], 5: ['fifth', 'fifths'],
   6: ['sixth', 'sixths'], 7: ['seventh', 'sevenths'], 8: ['eighth', 'eighths'], 9: ['ninth', 'ninths'],
-  10: ['tenth', 'tenths'], 12: ['twelfth', 'twelfths'],
+  10: ['tenth', 'tenths'], 12: ['twelfth', 'twelfths'], 100: ['hundredth', 'hundredths'],
 };
 
 function fractionWords(n, d) {

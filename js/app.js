@@ -31,6 +31,19 @@ const starRow = (n, max = 3) =>
 const buddyName = (p) => buddyOf(p).name.split(' ')[0];
 const sayButton = (id, label = 'Read aloud') => (canSpeak ? `<button class="say-btn" data-say="${id}" aria-label="${label}">🔊</button>` : '');
 const shuffle = (arr) => [...arr].map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+const coreTopics = (grade) => TOPICS[grade].filter((t) => !t.extra);
+const findTopic = (id) => Object.values(TOPICS).flat().find((t) => t.id === id);
+const FOCUS_BONUS = 5;
+const GOAL_BONUS = 20;
+
+const startOfDay = (t) => new Date(t).setHours(0, 0, 0, 0);
+// Weeks start on Sunday.
+function weekStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.setDate(d.getDate() - d.getDay());
+}
+const questsThisWeek = (p) => p.history.filter((h) => h.t >= weekStart()).length;
 
 function show(html) {
   stopSpeaking();
@@ -118,7 +131,7 @@ function renderHome() {
 
   show(`
     <div class="screen">
-      <div class="topbar"><span class="spacer"></span>${soundButton()}</div>
+      <div class="topbar"><span class="spacer"></span><button class="btn secondary small" data-action="parents">👪 Grown-ups</button>${soundButton()}</div>
       <h1 class="title">Math Quest</h1>
       <p class="subtitle">Who's playing today?</p>
       <div class="profiles">
@@ -137,6 +150,7 @@ function renderHome() {
   });
   on('[data-edit]', (el) => renderEdit(el.dataset.edit));
   on('[data-action="add"]', () => renderEdit(null));
+  on('[data-action="parents"]', renderParentGate);
 }
 
 /* ------------------------- Edit player ------------------------- */
@@ -218,10 +232,14 @@ function renderTopics() {
   const p = currentProfile();
   if (!p) return renderHome();
   applyLook(p);
-  const cards = TOPICS[p.grade]
+  // Focus areas (picked by a grown-up) come first.
+  const focused = (t) => !t.extra && p.focus.includes(t.id);
+  const ordered = [...TOPICS[p.grade].filter(focused), ...TOPICS[p.grade].filter((t) => !focused(t))];
+  const cards = ordered
     .map(
       (t) => `
-      <button class="topic-card" data-topic="${t.id}">
+      <button class="topic-card ${focused(t) ? 'focus' : ''}" data-topic="${t.id}">
+        ${focused(t) ? `<span class="focus-tag">⭐ Focus +${FOCUS_BONUS}🪙</span>` : ''}
         <div class="topic-emoji">${t.emoji}</div>
         <div class="topic-name">${t.name}</div>
         <div class="topic-desc">${t.desc}</div>
@@ -233,15 +251,22 @@ function renderTopics() {
     (l) => `<button class="level-opt ${l.id === p.level ? 'selected' : ''}" data-level="${l.id}">
       ${l.emoji} ${l.name}<small>🪙 ×${l.id} coins</small></button>`,
   ).join('');
+  const done = questsThisWeek(p);
+  const goal = p.weeklyGoal
+    ? `<div class="goal"><span>🎯 This week: <strong>${Math.min(done, p.weeklyGoal)} of ${p.weeklyGoal}</strong> quests${done >= p.weeklyGoal ? ' ✅' : ''}</span>
+        <div class="progress"><div style="width:${Math.min(100, (done / p.weeklyGoal) * 100)}%"></div></div></div>`
+    : '';
+  const greeting = p.message ? `Hi ${p.name}! A note from your grown-up: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
 
   show(`
     <div class="screen">
       ${playerBar(p)}
       <div class="topics-head">
-        ${buddyRow(p, `Hi ${p.name}! Pick a quest!`)}
+        ${buddyRow(p, greeting)}
         <button class="btn shop-btn" data-action="shop">🛒 Shop</button>
       </div>
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
+      ${goal}
       <div class="topics">${cards}</div>
     </div>`);
 
@@ -328,6 +353,167 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
   });
 }
 
+/* --------------------------- Grown-ups --------------------------- */
+
+function renderParentGate() {
+  if (!state.pin) return renderParents();
+  show(`
+    <div class="screen">
+      <div class="topbar"><button class="icon-btn" data-action="back" aria-label="Back">←</button></div>
+      <div class="panel">
+        <h2>👪 Grown-ups only</h2>
+        <label class="field-label" for="pin">Enter your PIN</label>
+        <input id="pin" class="text-input pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
+        <div class="feedback" id="feedback"></div>
+        <div class="panel-actions"><button class="btn" data-action="open">Open</button></div>
+      </div>
+    </div>`);
+  const input = app.querySelector('#pin');
+  const tryPin = () => {
+    if (input.value === state.pin) return renderParents();
+    setFeedback('try', "That PIN doesn't match.");
+    input.value = '';
+  };
+  input.focus();
+  input.addEventListener('keydown', (e) => e.key === 'Enter' && tryPin());
+  on('[data-action="back"]', renderHome);
+  on('[data-action="open"]', tryPin);
+}
+
+function ago(t) {
+  const days = Math.round((startOfDay(Date.now()) - startOfDay(t)) / 86400000);
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+const GOALS = [0, 3, 5, 7, 10];
+
+function renderParents(childId = state.currentId) {
+  applyLook(null);
+  const p = state.profiles.find((k) => k.id === childId) ?? state.profiles[0];
+  const first = p.name;
+
+  const topicRows = coreTopics(p.grade)
+    .map((t) => {
+      const s = p.stats[t.id];
+      const pct = s?.asked ? Math.round((100 * s.firstTry) / s.asked) : null;
+      const flags = [];
+      if (s?.asked >= 8 && pct < 70) flags.push('<span class="flag">🔎 Tricky</span>');
+      if (s?.whyAsked >= 3 && s.whyRight / s.whyAsked < 0.6) flags.push('<span class="flag">🧠 Explaining is tricky</span>');
+      const detail = s?.asked
+        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''} · ${ago(s.last)}`
+        : 'Not played yet';
+      return `
+        <button class="toggle-opt topic-opt ${p.focus.includes(t.id) ? 'selected' : ''}" data-focus="${t.id}">
+          <span class="check"></span><span class="topic-opt-emoji">${t.emoji}</span>
+          <span class="topic-opt-text"><strong>${t.name}</strong>${flags.join('')}<small>${detail}</small></span>
+        </button>`;
+    })
+    .join('');
+
+  const recent = p.history.slice(0, 10).map((h) => {
+    const t = findTopic(h.topic);
+    const lvl = LEVELS.find((l) => l.id === h.level);
+    const date = new Date(h.t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return `<div class="review-row"><span>${date} · ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
+      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}</strong></div>`;
+  }).join('');
+
+  show(`
+    <div class="screen parents">
+      <div class="topbar">
+        <button class="icon-btn" data-action="back" aria-label="Back">←</button>
+        <div class="who"><strong>👪 Grown-ups</strong></div>
+      </div>
+      <div class="tabs" role="tablist">
+        ${state.profiles.map((k) => `<button class="tab ${k.id === p.id ? 'selected' : ''}" data-child="${k.id}" role="tab">${k.avatar} ${esc(k.name)}</button>`).join('')}
+      </div>
+
+      <div class="panel">
+        <h2>⭐ Focus areas</h2>
+        <p class="panel-note">Tick what ${esc(first)} is working on. Focus quests show first on ${esc(first)}'s screen, pay ${FOCUS_BONUS} bonus coins, and come up more often in Mixed Challenge and Fix the Mistake.
+          🔎 marks topics where ${esc(first)} gets less than 70% right the first time.</p>
+        <div class="toggle-list">${topicRows}</div>
+      </div>
+
+      <div class="panel">
+        <h2>🧠 Explaining</h2>
+        <div class="toggle-list">
+          <button class="toggle-opt ${p.whyEvery ? 'selected' : ''}" data-toggle="whyEvery"><span class="check"></span>
+            <span>Ask “How do you know?” after <strong>every</strong> right answer <small class="block">Normally it's asked 3 times a round.</small></span></button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>🎯 Weekly goal</h2>
+        <p class="panel-note">Quests to finish each week (Sunday to Saturday). Reaching it pays ${GOAL_BONUS} bonus coins. This week: <strong>${questsThisWeek(p)}</strong> so far.</p>
+        <div class="grade-row">
+          ${GOALS.map((g) => `<button class="grade-opt ${g === p.weeklyGoal ? 'selected' : ''}" data-goal="${g}">${g ? `${g} quests` : 'Off'}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📝 Note for ${esc(first)}</h2>
+        <p class="panel-note">${esc(buddyName(p))} shows this on the quest screen. Try a tip from class, like “Line up the places!”</p>
+        <textarea id="note" class="text-input note-input" maxlength="120" rows="2" placeholder="Write a short note">${esc(p.message)}</textarea>
+        <div class="saved-note hidden" id="noteSaved">✓ Saved</div>
+      </div>
+
+      <div class="panel">
+        <h2>📅 Recent quests</h2>
+        ${recent ? `<div class="review">${recent}</div>` : `<p class="panel-note">No quests yet.</p>`}
+      </div>
+
+      <div class="panel">
+        <h2>🔒 Grown-up PIN</h2>
+        <p class="panel-note">${state.pin ? 'A PIN is set, so kids need it to open this page.' : 'Add a 4-digit PIN so kids can’t open this page.'}</p>
+        <div class="pin-row">
+          <input id="newPin" class="text-input pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off" />
+          <button class="btn" data-action="setPin">${state.pin ? 'Change PIN' : 'Set PIN'}</button>
+          ${state.pin ? '<button class="btn danger" data-action="clearPin">Remove</button>' : ''}
+        </div>
+        <div class="feedback" id="feedback"></div>
+      </div>
+    </div>`);
+
+  on('[data-action="back"]', renderHome);
+  on('[data-child]', (el) => renderParents(el.dataset.child));
+  on('[data-focus]', (el) => {
+    const id = el.dataset.focus;
+    p.focus = p.focus.includes(id) ? p.focus.filter((x) => x !== id) : [...p.focus, id];
+    el.classList.toggle('selected', p.focus.includes(id));
+    save();
+  });
+  on('[data-toggle]', (el) => {
+    p[el.dataset.toggle] = !p[el.dataset.toggle];
+    el.classList.toggle('selected', p[el.dataset.toggle]);
+    save();
+  });
+  on('[data-goal]', (el) => {
+    p.weeklyGoal = Number(el.dataset.goal);
+    app.querySelectorAll('[data-goal]').forEach((b) => b.classList.toggle('selected', b === el));
+    save();
+  });
+  const note = app.querySelector('#note');
+  note.addEventListener('input', () => {
+    p.message = note.value.trim();
+    save();
+    app.querySelector('#noteSaved').classList.remove('hidden');
+  });
+  on('[data-action="setPin"]', () => {
+    const value = app.querySelector('#newPin').value;
+    if (!/^\d{4}$/.test(value)) return setFeedback('try', 'Use exactly 4 digits.');
+    state.pin = value;
+    save();
+    renderParents(p.id);
+    setFeedback('good', '✓ PIN saved');
+  });
+  on('[data-action="clearPin"]', () => {
+    state.pin = '';
+    save();
+    renderParents(p.id);
+  });
+}
+
 /* ---------------------------- Playing ---------------------------- */
 
 // "How do you know?" comes up on these questions (or the next one answered right on the first try).
@@ -336,8 +522,12 @@ const WHY_AT = [2, 5, 8];
 function startRound(topicId) {
   const p = currentProfile();
   const topic = TOPICS[p.grade].find((t) => t.id === topicId);
+  // Mixed Challenge and Fix the Mistake pick focus areas more often.
+  const core = coreTopics(p.grade);
+  const focus = core.filter((t) => p.focus.includes(t.id));
   session = {
     topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0,
   };
   loadQuestion();
@@ -347,9 +537,10 @@ function loadQuestion() {
   // Avoid repeating the same question within a round.
   let q;
   let tries = 0;
-  do q = session.topic.gen(session.level);
+  do q = session.topic.gen(session.level, session.pool);
   while (session.seen.has(q.summary ?? q.prompt) && tries++ < 25);
   session.seen.add(q.summary ?? q.prompt);
+  q.topicId ??= session.topic.id;
   const name = buddyName(currentProfile());
   for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
   if (WHY_AT.includes(session.index)) session.whyDue = true;
@@ -367,7 +558,7 @@ function nextQuestion() {
 function questionSpeech(q) {
   const name = buddyName(currentProfile());
   const parts = [q.prompt];
-  const summary = q.claim !== undefined ? q.baseSummary : q.summary;
+  const summary = q.spoken ?? (q.claim !== undefined ? q.baseSummary : q.summary);
   if (q.visual && summary) parts.push(summary);
   if (q.claim !== undefined) parts.push(`${name} says ${choiceWords(q.claim)}. Is ${name} right?`);
   else if (q.choices) parts.push(`Is it ${q.choices.map(choiceWords).join(', or ')}?`);
@@ -379,7 +570,7 @@ function renderQuestion() {
   const q = session.current;
   const pct = (session.index / QUESTIONS_PER_ROUND) * 100;
   const input = q.choices
-    ? `<div class="choices ${q.claim !== undefined ? 'two' : ''}">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
+    ? `<div class="choices ${q.claim !== undefined ? 'two' : ''} ${q.choices.some((c) => c.length > 6) ? 'long' : ''}">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
     : `<div class="numpad">
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button data-key="${n}">${n}</button>`).join('')}
         <button data-key="back" aria-label="Delete">⌫</button>
@@ -453,6 +644,29 @@ function setFeedback(kind, text) {
   el.textContent = text;
 }
 
+// Progress for the Grown-ups page, counted under the question's own topic
+// (so Mixed Challenge questions count toward Fractions, Rounding, ...).
+function topicStats(q) {
+  const p = currentProfile();
+  p.stats[q.topicId] ??= { asked: 0, firstTry: 0, whyAsked: 0, whyRight: 0, last: 0 };
+  return p.stats[q.topicId];
+}
+
+function recordAnswer(q, firstTry) {
+  const s = topicStats(q);
+  s.asked++;
+  if (firstTry) s.firstTry++;
+  s.last = Date.now();
+  save();
+}
+
+function recordWhy(q, right) {
+  const s = topicStats(q);
+  s.whyAsked++;
+  if (right) s.whyRight++;
+  save();
+}
+
 function submit(value, choiceEl) {
   const q = session.current;
   const buddy = buddyOf(currentProfile());
@@ -466,13 +680,15 @@ function submit(value, choiceEl) {
       session.streak++;
       session.bestStreak = Math.max(session.bestStreak, session.streak);
     }
+    recordAnswer(q, session.attempts === 0);
     choiceEl?.classList.add('right');
     setFeedback('good', '✓ Correct!');
     say(pick([...buddy.cheer, ...PRAISE]), 'happy');
     sounds.correct();
     confetti(session.streak >= 3 ? 60 : 30);
     const s = session;
-    const askWhy = q.why && (q.alwaysWhy || (session.attempts === 0 && session.whyDue));
+    const whyNow = session.whyDue || currentProfile().whyEvery;
+    const askWhy = q.why && (q.alwaysWhy || (session.attempts === 0 && whyNow));
     if (askWhy) {
       session.whyDue = false;
       setTimeout(() => session === s && showWhy(q), 900);
@@ -508,6 +724,7 @@ function submit(value, choiceEl) {
   session.locked = true;
   const shown = q.choices ? q.answer : Number(q.answer).toLocaleString('en-US');
   session.missed.push({ question: q.summary ?? q.prompt, answer: shown });
+  recordAnswer(q, false);
   setFeedback('reveal', `The answer is ${shown}`);
   say("That's a tricky one. We'll get the next one!", 'sad');
   if (choiceEl) choiceEl.classList.add('wrong');
@@ -545,6 +762,7 @@ function showWhy(q) {
     if (session.whyDone) return;
     session.whyDone = true;
     const chosen = options[Number(el.dataset.why)];
+    recordWhy(q, !!chosen.right);
     app.querySelectorAll('[data-why]').forEach((b) => {
       b.disabled = true;
       if (options[Number(b.dataset.why)].right) b.classList.add('right');
@@ -576,7 +794,15 @@ function finishRound() {
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
   const earned = (firstTry + whyRight) * level;
-  p.coins += earned;
+  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight });
+  p.history.length = Math.min(p.history.length, 60);
+  const bonuses = [];
+  if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);
+  if (p.weeklyGoal && p.goalWeek !== weekStart() && questsThisWeek(p) >= p.weeklyGoal) {
+    p.goalWeek = weekStart();
+    bonuses.push(['🎯 Weekly goal reached', GOAL_BONUS]);
+  }
+  p.coins += earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
   save();
 
   sounds.win();
@@ -600,6 +826,7 @@ function finishRound() {
         <p class="result-line">You got <strong>${firstTry} of ${QUESTIONS_PER_ROUND}</strong> on the first try.</p>
         ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
+        ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
         ${
           missed.length
             ? `<div class="review"><h3>Let's look at these again</h3>

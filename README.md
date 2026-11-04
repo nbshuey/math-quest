@@ -6,8 +6,8 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 
 - **Player profiles**: each kid gets a name, an avatar and a grade level.
 - **Grade-matched quests** (10 questions per round):
-  - **Grade 2**: addition & subtraction within 100 (including word problems), place value, skip counting, comparing numbers, counting coins
-  - **Grade 4**: times tables to 12, multi-digit multiplication, division with remainders, equivalent fractions, comparing fractions (with fraction bars), rounding, place value to hundred-thousands
+  - **Grade 2** (11 topics): addition & subtraction within 100 (including word problems), place value, skip counting, comparing numbers, even & odd (partner dots), equal groups & arrays, counting coins, telling time (clock face, elapsed time), picture & bar graphs, shapes (sides, corners, halves/thirds/fourths)
+  - **Grade 4** (13 topics): times tables to 12, multi-digit multiplication, division with remainders, multi-digit add & subtract (carrying, borrowing across zeros), factors, multiples & primes, equivalent fractions, comparing fractions (with fraction bars), adding & subtracting fractions, decimals (tenths & hundredths, with hundred grids), rounding, place value to millions, area & perimeter, measurement conversions
   - **Mixed Challenge** for each grade
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
 - **Kid-friendly feedback**: a hint after the first miss, the answer shown after the second, and a review list at the end
@@ -19,6 +19,14 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **🔤 Easy-reading text**: Lexend font, extra letter and line spacing, left-aligned word problems, a softer background and no floating decorations.
 - **Buddy & shop**: each player has a buddy who cheers them on. Coins buy new buddies (wizard, dragon, unicorn, robot…), hats, and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents.
 - **Rewards**: up to 3 stars per quest and level, coins for first-try answers (×1 / ×2 / ×3 by level), streaks 🔥, confetti and sounds
+- **👪 Grown-ups page** (button on the home screen, optional 4-digit PIN):
+  - **Focus areas**: tick the topics a kid is struggling with. They show first with a ⭐ badge, pay bonus coins, and come up about 4× as often in Mixed Challenge and Fix the Mistake.
+  - **Progress per topic**: how often they're right the first time and how many explanations they got, counted under the real topic even in mixed rounds. 🔎 flags topics under 70%, 🧠 flags trouble explaining.
+  - **Explaining**: optionally ask "How do you know?" after every right answer.
+  - **Weekly goal**: 3–10 quests a week, with a progress bar on the kid's screen and a bonus when it's reached.
+  - **Note**: a short message the buddy shows on the quest screen ("Line up the places!").
+  - **Recent quests**: the last 10 rounds with scores.
+  - Forgot the PIN? It's stored with the rest of the app's data; clearing this site's data in the browser resets it (and the kids' progress).
 - On-screen number pad (tablet friendly) plus keyboard support
 - Progress is saved in the browser (localStorage)
 
@@ -47,7 +55,7 @@ js/effects.js     confetti and sound effects
 
 ### Adding a topic
 
-Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ prompt, answer, hint, why }` (plus optional `choices`, `visual`, `summary`, `mistake`), then add it to the grade's list in `TOPICS`. `why` is `{ right, wrong: [two wrong ideas], visual? }`, and `mistake` is a believable wrong answer for Fix the Mistake.
+Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ prompt, answer, hint, why }` (plus optional `choices`, `visual`, `summary`, `spoken`, `mistake`), then add it to the grade's list in `TOPICS`. `why` is `{ right, wrong: [two wrong ideas], visual? }`, and `mistake` is a believable wrong answer for Fix the Mistake.
 
 ### Adding shop items
 
@@ -55,10 +63,9 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 
 ## Ideas for later
 
-- Telling time (grade 2) and area & perimeter / angles (grade 4)
+- Angles and line plots (grade 4)
 - Timed "speed round" for times tables
 - Buddies that grow or evolve as kids earn stars
 - Step-by-step picture hints (tap through an area model or number line)
 - "Tell your grown-up" prompts to explain answers out loud, with sentence starters
-- Parent goals page tracking specific learning goals and which topics need practice
 - Adaptive difficulty based on recent answers

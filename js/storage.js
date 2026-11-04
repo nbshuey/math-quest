@@ -20,6 +20,15 @@ function normalizeProfile(p) {
     theme: 'sunny',
     autoRead: false,
     easyRead: false,
+    // Set by a grown-up on the Grown-ups page.
+    focus: [], // topic ids to practice more
+    whyEvery: false, // ask "How do you know?" after every right answer
+    weeklyGoal: 0, // quests per week (0 = off)
+    goalWeek: 0, // start of the week the goal bonus was last paid
+    message: '', // a note the buddy shows on the quest screen
+    // Progress: per-topic totals, and the most recent rounds.
+    stats: {},
+    history: [],
     ...p,
     owned: { buddies: [], hats: [], themes: [], ...p.owned },
   };
@@ -35,6 +44,7 @@ function normalizeProfile(p) {
 function defaultState() {
   return {
     sound: true,
+    pin: '', // optional grown-up PIN
     currentId: null,
     profiles: [makeProfile('Player 1', 4, '🦊'), makeProfile('Player 2', 2, '🐼')],
   };
