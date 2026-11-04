@@ -23,6 +23,7 @@ function normalizeProfile(p) {
     // Set by a grown-up on the Grown-ups page.
     focus: [], // topic ids to practice more
     whyEvery: false, // ask "How do you know?" after every right answer
+    tellGrownUp: true, // "Tell your grown-up" prompts to explain out loud
     weeklyGoal: 0, // quests per week (0 = off)
     goalWeek: 0, // start of the week the goal bonus was last paid
     message: '', // a note the buddy shows on the quest screen

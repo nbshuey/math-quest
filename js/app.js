@@ -400,7 +400,7 @@ function renderParents(childId = state.currentId) {
       if (s?.asked >= 8 && pct < 70) flags.push('<span class="flag">🔎 Tricky</span>');
       if (s?.whyAsked >= 3 && s.whyRight / s.whyAsked < 0.6) flags.push('<span class="flag">🧠 Explaining is tricky</span>');
       const detail = s?.asked
-        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''} · ${ago(s.last)}`
+        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''}${s.tellAsked ? ` · 🗣️ ${s.told} of ${s.tellAsked} out loud` : ''} · ${ago(s.last)}`
         : 'Not played yet';
       return `
         <button class="toggle-opt topic-opt ${p.focus.includes(t.id) ? 'selected' : ''}" data-focus="${t.id}">
@@ -415,7 +415,7 @@ function renderParents(childId = state.currentId) {
     const lvl = LEVELS.find((l) => l.id === h.level);
     const date = new Date(h.t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     return `<div class="review-row"><span>${date} · ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
-      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}</strong></div>`;
+      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}</strong></div>`;
   }).join('');
 
   show(`
@@ -440,6 +440,17 @@ function renderParents(childId = state.currentId) {
         <div class="toggle-list">
           <button class="toggle-opt ${p.whyEvery ? 'selected' : ''}" data-toggle="whyEvery"><span class="check"></span>
             <span>Ask “How do you know?” after <strong>every</strong> right answer <small class="block">Normally it's asked 3 times a round.</small></span></button>
+          <button class="toggle-opt ${p.tellGrownUp ? 'selected' : ''}" data-toggle="tellGrownUp"><span class="check"></span>
+            <span>🗣️ “Tell your grown-up” prompts <small class="block">Up to twice a round, ${esc(first)} explains out loud and you tap how it went. A great explanation earns coins. There's a skip button for when no one is around.</small></span></button>
+        </div>
+        <div class="tips">
+          <strong>When ${esc(first)} explains to you:</strong>
+          <ul>
+            <li>Listen to the whole thing before helping.</li>
+            <li>Ask “How do you know?” or “Can you show me on the picture?”</li>
+            <li>If ${esc(first)} gets stuck, read a sentence starter together.</li>
+            <li>Tap <strong>Great explaining</strong> for clear steps, even short ones. Effort counts!</li>
+          </ul>
         </div>
       </div>
 
@@ -528,7 +539,7 @@ function startRound(topicId) {
   session = {
     topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
     pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
-    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0,
+    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false,
   };
   loadQuestion();
 }
@@ -649,6 +660,8 @@ function setFeedback(kind, text) {
 function topicStats(q) {
   const p = currentProfile();
   p.stats[q.topicId] ??= { asked: 0, firstTry: 0, whyAsked: 0, whyRight: 0, last: 0 };
+  p.stats[q.topicId].tellAsked ??= 0;
+  p.stats[q.topicId].told ??= 0;
   return p.stats[q.topicId];
 }
 
@@ -664,6 +677,13 @@ function recordWhy(q, right) {
   const s = topicStats(q);
   s.whyAsked++;
   if (right) s.whyRight++;
+  save();
+}
+
+function recordTell(q, great) {
+  const s = topicStats(q);
+  s.tellAsked++;
+  if (great) s.told++;
   save();
 }
 
@@ -778,23 +798,90 @@ function showWhy(q) {
       say("Here's the right thinking. Let's read it together.", 'sad');
       if (p.autoRead) speak(q.why.right);
     }
-    app.querySelector('#next').classList.remove('hidden');
+    if (tellDue()) {
+      const s = session;
+      setTimeout(() => session === s && showTell(q), 1400);
+    } else app.querySelector('#next').classList.remove('hidden');
   });
   session.whyDone = false;
   if (p.autoRead) speak(allChoices);
+}
+
+// "Tell your grown-up": after picking an explanation, the kid says it out loud
+// and a grown-up taps how it went. Twice a round at most, and easy to skip.
+const TELL_STARTERS = [
+  'First I…, then I…',
+  'I know it’s right because…',
+  'I can check it by…',
+  'The picture shows…',
+  'It’s not the other answer because…',
+  'The trick I used was…',
+];
+const TELL_MAX = 2;
+const TELL_AFTER = [2, 6]; // the earliest question for the 1st and 2nd prompt
+
+function tellDue() {
+  return currentProfile().tellGrownUp && !session.tellOff && session.tellAsked < TELL_MAX && session.index >= TELL_AFTER[session.tellAsked];
+}
+
+function showTell(q) {
+  const p = currentProfile();
+  session.tellAsked++;
+  const starters = shuffle(TELL_STARTERS).slice(0, 3);
+  const words = `Tell your grown-up how you solved it. You can start with: ${starters.join(' Or: ')}`;
+  app.querySelector('#input-area').insertAdjacentHTML('beforeend', `
+    <div class="tell" id="tell">
+      <div class="why-ask">🗣️ Tell your grown-up! ${sayButton('tell', 'Read aloud')}</div>
+      <p class="tell-sub">Say out loud how you solved it. You can start with:</p>
+      <div class="tell-starters">${starters.map((t) => `<span class="tell-starter">“${esc(t)}”</span>`).join('')}</div>
+      <div class="tell-grownup">
+        <div class="tell-label">👪 Grown-up: how did the explaining go?</div>
+        <div class="tell-actions">
+          <button class="btn" data-tell="great">⭐ Great explaining!</button>
+          <button class="btn secondary" data-tell="practice">💪 Getting there</button>
+        </div>
+        <button class="link-btn" data-tell="skip">No grown-up here right now</button>
+      </div>
+    </div>`);
+  app.querySelector('#tell').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  say('Tell your grown-up how you know!', 'happy');
+  on('[data-say="tell"]', () => speak(words));
+  on('[data-tell]', (el) => {
+    const kind = el.dataset.tell;
+    const card = app.querySelector('#tell');
+    if (kind === 'skip') {
+      // No one to listen: stop asking for the rest of this round.
+      session.tellAsked--;
+      session.tellOff = true;
+      card.remove();
+    } else {
+      const great = kind === 'great';
+      recordTell(q, great);
+      if (great) {
+        session.told++;
+        sounds.win();
+        confetti(60);
+      } else sounds.tap();
+      const line = great ? 'Wow, great explaining! 🗣️ Bonus coins!' : 'Thanks for explaining! Talking it out makes your brain stronger. 💪';
+      card.innerHTML = `<div class="tell-done">${line}</div>`;
+      say(line, 'happy');
+    }
+    app.querySelector('#next').classList.remove('hidden');
+  });
+  if (p.autoRead) speak(words);
 }
 
 /* ---------------------------- Results ---------------------------- */
 
 function finishRound() {
   const p = currentProfile();
-  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight } = session;
+  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told } = session;
   const stars = firstTry >= 9 ? 3 : firstTry >= 7 ? 2 : firstTry >= 5 ? 1 : 0;
   const key = `${topic.id}:${level}`;
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
-  const earned = (firstTry + whyRight) * level;
-  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight });
+  const earned = (firstTry + whyRight + told) * level;
+  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told });
   p.history.length = Math.min(p.history.length, 60);
   const bonuses = [];
   if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);
@@ -825,6 +912,7 @@ function finishRound() {
         ${newBest ? '<div class="badge">New best!</div>' : ''}
         <p class="result-line">You got <strong>${firstTry} of ${QUESTIONS_PER_ROUND}</strong> on the first try.</p>
         ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
+        ${tellAsked ? `<p class="result-line">🗣️ Explained out loud: <strong>${told} of ${tellAsked}</strong> great</p>` : ''}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
         ${

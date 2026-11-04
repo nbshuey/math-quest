@@ -14,6 +14,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **Reasoning practice**:
   - **🧠 How do you know?**: on questions 3, 6 and 9 (or the next one answered right first try), kids pick the explanation that matches the thinking. Many come with a picture model: area models for multiplication, number lines for rounding, fraction bars. Right explanations earn bonus coins.
   - **🕵️ Fix the Mistake**: the buddy answers a question (sometimes right, often with a common mistake). Kids decide if the buddy is right, then pick the right thinking.
+  - **🗣️ Tell your grown-up**: up to twice a round, after picking an explanation, kids explain it out loud using sentence starters ("First I…, then I…", "I can check it by…"). A grown-up taps ⭐ Great explaining (bonus coins) or 💪 Getting there; "No grown-up here right now" skips it for the round. Can be turned off on the Grown-ups page.
 - **Reading help** (per player, in ✏️ Edit player):
   - **🔊 Read aloud**: every question, hint and explanation has a speaker button, and math is read as words ("3 eighths", "remainder 2"). Can also read every question automatically.
   - **🔤 Easy-reading text**: Lexend font, extra letter and line spacing, left-aligned word problems, a softer background and no floating decorations.
@@ -67,5 +68,4 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 - Timed "speed round" for times tables
 - Buddies that grow or evolve as kids earn stars
 - Step-by-step picture hints (tap through an area model or number line)
-- "Tell your grown-up" prompts to explain answers out loud, with sentence starters
 - Adaptive difficulty based on recent answers
