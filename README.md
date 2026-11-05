@@ -10,7 +10,8 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Grade 4** (13 topics): times tables to 12, multi-digit multiplication, division with remainders, multi-digit add & subtract (carrying, borrowing across zeros), factors, multiples & primes, equivalent fractions, comparing fractions (with fraction bars), adding & subtracting fractions, decimals (tenths & hundredths, with hundred grids), rounding, place value to millions, area & perimeter, measurement conversions
   - **Mixed Challenge** for each grade
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
-- **Kid-friendly feedback**: a hint after the first miss, the answer shown after the second, and a review list at the end
+- **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button.
+- **Kid-friendly feedback**: the next hint step after the first miss, the answer shown after the second, and a review list at the end
 - **Reasoning practice**:
   - **🧠 How do you know?**: on questions 3, 6 and 9 (or the next one answered right first try), kids pick the explanation that matches the thinking. Many come with a picture model: area models for multiplication, number lines for rounding, fraction bars. Right explanations earn bonus coins.
   - **🕵️ Fix the Mistake**: the buddy answers a question (sometimes right, often with a common mistake). Kids decide if the buddy is right, then pick the right thinking.
@@ -22,7 +23,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **Rewards**: up to 3 stars per quest and level, coins for first-try answers (×1 / ×2 / ×3 by level), streaks 🔥, confetti and sounds
 - **👪 Grown-ups page** (button on the home screen, optional 4-digit PIN):
   - **Focus areas**: tick the topics a kid is struggling with. They show first with a ⭐ badge, pay bonus coins, and come up about 4× as often in Mixed Challenge and Fix the Mistake.
-  - **Progress per topic**: how often they're right the first time and how many explanations they got, counted under the real topic even in mixed rounds. 🔎 flags topics under 70%, 🧠 flags trouble explaining.
+  - **Progress per topic**: how often they're right the first time and how many explanations they got, counted under the real topic even in mixed rounds. 🔎 flags topics under 70%, 🧠 flags trouble explaining, 💡 flags topics where they use hints on half the questions or more.
   - **Explaining**: optionally ask "How do you know?" after every right answer.
   - **Weekly goal**: 3–10 quests a week, with a progress bar on the kid's screen and a bonus when it's reached.
   - **Note**: a short message the buddy shows on the quest screen ("Line up the places!").
@@ -56,7 +57,7 @@ js/effects.js     confetti and sound effects
 
 ### Adding a topic
 
-Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ prompt, answer, hint, why }` (plus optional `choices`, `visual`, `summary`, `spoken`, `mistake`), then add it to the grade's list in `TOPICS`. `why` is `{ right, wrong: [two wrong ideas], visual? }`, and `mistake` is a believable wrong answer for Fix the Mistake.
+Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ prompt, answer, hint, steps, why }` (plus optional `choices`, `visual`, `summary`, `spoken`, `mistake`), then add it to the grade's list in `TOPICS`. `why` is `{ right, wrong: [two wrong ideas], visual? }`, and `mistake` is a believable wrong answer for Fix the Mistake. `steps` is 2–5 short hints; the last one should leave the final step to the kid (end with "= ?" or a question).
 
 ### Adding shop items
 
@@ -67,5 +68,5 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 - Angles and line plots (grade 4)
 - Timed "speed round" for times tables
 - Buddies that grow or evolve as kids earn stars
-- Step-by-step picture hints (tap through an area model or number line)
+- Picture steps in hints (draw the area model or number line as you go)
 - Adaptive difficulty based on recent answers

@@ -201,6 +201,8 @@ body.easy-read .prompt { line-height: 1.4; }
 body.easy-read .prompt.word { font-size: clamp(1.4rem, 4.2vw, 1.9rem); font-weight: 600; text-align: left; max-width: 34ch; margin: 8px auto; }
 body.easy-read .hint, body.easy-read .bubble, body.easy-read .why-opt, body.easy-read .topic-desc { line-height: 1.6; }
 body.easy-read .hint { text-align: left; font-size: 1.2rem; }
+body.easy-read .steps li { opacity: 1; padding: 6px 0; }
+body.easy-read .steps li.latest { background: #fff; border-radius: 10px; padding: 6px 8px; }
 body.easy-read .why-opt { font-size: 1.25rem; font-weight: 400; }
 
 /* ----- Buddy ----- */
@@ -518,7 +520,12 @@ body.easy-read .why-opt { font-size: 1.25rem; font-weight: 400; }
 .feedback.try { color: var(--warn); }
 .feedback.reveal { color: var(--bad); }
 
-.hint { background: #fff8e1; border-radius: 16px; padding: 10px 16px; color: #7a5a00; font-size: 1.15rem; line-height: 1.3; }
+.hint { background: #fff8e1; border-radius: 16px; padding: 10px 16px; color: #7a5a00; font-size: 1.15rem; line-height: 1.3; text-align: left; }
+.hint-head { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
+.steps { margin: 0; padding-left: 1.6em; }
+.steps li { padding: 4px 0; opacity: 0.7; }
+.steps li.latest { opacity: 1; font-weight: 700; animation: pop 0.35s; }
+.steps li::marker { font-weight: 800; }
 
 .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 360px; margin: 16px auto 0; }
 .numpad button {

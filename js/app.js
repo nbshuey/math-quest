@@ -399,8 +399,9 @@ function renderParents(childId = state.currentId) {
       const flags = [];
       if (s?.asked >= 8 && pct < 70) flags.push('<span class="flag">🔎 Tricky</span>');
       if (s?.whyAsked >= 3 && s.whyRight / s.whyAsked < 0.6) flags.push('<span class="flag">🧠 Explaining is tricky</span>');
+      if (s?.asked >= 8 && s.hinted / s.asked >= 0.5) flags.push('<span class="flag">💡 Leans on hints</span>');
       const detail = s?.asked
-        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''}${s.tellAsked ? ` · 🗣️ ${s.told} of ${s.tellAsked} out loud` : ''} · ${ago(s.last)}`
+        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''}${s.tellAsked ? ` · 🗣️ ${s.told} of ${s.tellAsked} out loud` : ''}${s.hinted ? ` · 💡 hints on ${s.hinted} question${s.hinted > 1 ? 's' : ''}` : ''} · ${ago(s.last)}`
         : 'Not played yet';
       return `
         <button class="toggle-opt topic-opt ${p.focus.includes(t.id) ? 'selected' : ''}" data-focus="${t.id}">
@@ -415,7 +416,7 @@ function renderParents(childId = state.currentId) {
     const lvl = LEVELS.find((l) => l.id === h.level);
     const date = new Date(h.t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     return `<div class="review-row"><span>${date} · ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
-      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}</strong></div>`;
+      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}${h.hinted ? ` · 💡 ${h.hinted}` : ''}</strong></div>`;
   }).join('');
 
   show(`
@@ -539,7 +540,7 @@ function startRound(topicId) {
   session = {
     topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
     pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
-    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false,
+    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false, hinted: 0,
   };
   loadQuestion();
 }
@@ -554,8 +555,9 @@ function loadQuestion() {
   q.topicId ??= session.topic.id;
   const name = buddyName(currentProfile());
   for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
+  q.steps = (q.steps?.length ? q.steps : [q.hint]).map((step) => step.replaceAll('{buddy}', name));
   if (WHY_AT.includes(session.index)) session.whyDue = true;
-  Object.assign(session, { current: q, attempts: 0, locked: false, input: '' });
+  Object.assign(session, { current: q, attempts: 0, locked: false, input: '', stepsShown: 0 });
   renderQuestion();
 }
 
@@ -612,7 +614,10 @@ function renderQuestion() {
         ${claim}
         ${q.choices ? '' : '<div class="answer-display" id="answer">&nbsp;</div>'}
         <div class="feedback" id="feedback"></div>
-        <div class="hint hidden" id="hint">💡 <span>${esc(q.hint)}</span> ${sayButton('hint', 'Read the hint aloud')}</div>
+        <div class="hint hidden" id="hint">
+          <div class="hint-head">💡 Step by step</div>
+          <ol class="steps" id="steps"></ol>
+        </div>
       </div>
       <div id="input-area">${input}</div>
       <div class="play-actions">
@@ -623,7 +628,6 @@ function renderQuestion() {
 
   bindBubble();
   on('[data-say="question"]', () => speak(questionSpeech(q)));
-  on('[data-say="hint"]', () => speak(q.hint));
   on('[data-key]', (el) => pressKey(el.dataset.key));
   on('[data-choice]', (el) => submit(el.dataset.choice, el));
   on('[data-action="hint"]', showHint);
@@ -642,11 +646,26 @@ function pressKey(key) {
   app.querySelector('#answer').textContent = session.input ? Number(session.input).toLocaleString('en-US') : ' ';
 }
 
+// Step-by-step hints: each tap shows one more step. The last step always
+// leaves the final bit of work for the kid.
 function showHint() {
-  const hint = app.querySelector('#hint');
-  if (!hint.classList.contains('hidden')) return;
-  hint.classList.remove('hidden');
-  if (currentProfile().autoRead) speak(session.current.hint);
+  const q = session.current;
+  const n = session.stepsShown;
+  if (n >= q.steps.length) return;
+  if (n === 0) recordHint(q);
+  session.stepsShown++;
+  const step = q.steps[n];
+  const list = app.querySelector('#steps');
+  list.querySelectorAll('li').forEach((li) => li.classList.remove('latest'));
+  list.insertAdjacentHTML('beforeend', `<li class="latest"><span>${esc(step)}</span> ${sayButton(`step-${n}`, `Read step ${n + 1} aloud`)}</li>`);
+  list.querySelector(`[data-say="step-${n}"]`)?.addEventListener('click', () => speak(step));
+  app.querySelector('#hint').classList.remove('hidden');
+
+  const btn = app.querySelector('#hintBtn');
+  const left = q.steps.length - session.stepsShown;
+  if (left) btn.textContent = `👣 Next step (${session.stepsShown + 1} of ${q.steps.length})`;
+  else btn.classList.add('hidden');
+  if (currentProfile().autoRead) speak(step);
 }
 
 function setFeedback(kind, text) {
@@ -662,7 +681,14 @@ function topicStats(q) {
   p.stats[q.topicId] ??= { asked: 0, firstTry: 0, whyAsked: 0, whyRight: 0, last: 0 };
   p.stats[q.topicId].tellAsked ??= 0;
   p.stats[q.topicId].told ??= 0;
+  p.stats[q.topicId].hinted ??= 0;
   return p.stats[q.topicId];
+}
+
+function recordHint(q) {
+  topicStats(q).hinted++;
+  session.hinted++;
+  save();
 }
 
 function recordAnswer(q, firstTry) {
@@ -746,6 +772,7 @@ function submit(value, choiceEl) {
   session.missed.push({ question: q.summary ?? q.prompt, answer: shown });
   recordAnswer(q, false);
   setFeedback('reveal', `The answer is ${shown}`);
+  app.querySelector('#hintBtn').classList.add('hidden');
   say("That's a tricky one. We'll get the next one!", 'sad');
   if (choiceEl) choiceEl.classList.add('wrong');
   app.querySelectorAll('[data-choice]').forEach((b) => b.dataset.choice === q.answer && b.classList.add('right'));
@@ -875,13 +902,13 @@ function showTell(q) {
 
 function finishRound() {
   const p = currentProfile();
-  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told } = session;
+  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told, hinted } = session;
   const stars = firstTry >= 9 ? 3 : firstTry >= 7 ? 2 : firstTry >= 5 ? 1 : 0;
   const key = `${topic.id}:${level}`;
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
   const earned = (firstTry + whyRight + told) * level;
-  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told });
+  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told, hinted });
   p.history.length = Math.min(p.history.length, 60);
   const bonuses = [];
   if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);

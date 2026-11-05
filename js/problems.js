@@ -97,6 +97,64 @@ const why = (right, wrong, visual) => ({ right, wrong, visual });
 const cap = (text) => text[0].toUpperCase() + text.slice(1);
 const aOrAn = (word) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
 
+/* ----------------------- Step-by-step hints -----------------------
+   Each question can carry `steps`: short hints shown one at a time.
+   The last step always leaves the final bit of work for the kid. */
+
+const PLACES = ['ones', 'tens', 'hundreds', 'thousands', 'ten-thousands', 'hundred-thousands'];
+const digitsOf = (n) => String(n).split('').reverse().map(Number); // ones first
+
+// Column adding or subtracting, one place at a time. Works the first two
+// places, then leaves the rest (and putting the digits together) to the kid.
+function columnSteps(a, b, add) {
+  const top = digitsOf(a);
+  const bottom = digitsOf(b);
+  const steps = [];
+  let carry = 0;
+  for (let i = 0; i < top.length; i++) {
+    const [x, y] = [top[i], bottom[i] ?? 0];
+    const name = cap(PLACES[i]);
+    const last = i === top.length - 1 || (i === 2 && top.length > 3);
+    if (last && i >= 2 && top.length > 3) {
+      steps.push(`Keep going left the same way: ${PLACES.slice(2, top.length).join(', ')}.${add ? ' Remember any carried 1!' : ''}`);
+      break;
+    }
+    if (add) {
+      const sum = x + y + carry;
+      const shown = `${name}: ${x} + ${y}${carry ? ' + 1 carried' : ''}`;
+      if (last) steps.push(`${shown} = ?`);
+      else steps.push(`${shown} = ${sum}.${sum >= 10 ? ` Write ${sum % 10} and carry 1 to the ${PLACES[i + 1]}.` : ''}`);
+      carry = sum >= 10 ? 1 : 0;
+    } else {
+      if (last) {
+        steps.push(`${name}: ${x} − ${y} = ?`);
+        break;
+      }
+      if (x < y) {
+        let j = i + 1;
+        while (top[j] === 0) top[j++] = 9;
+        top[j]--;
+        const from = j === i + 1 ? `the ${PLACES[i + 1]}` : `the ${PLACES[j]} (the zeros in between become 9s)`;
+        steps.push(`${name}: ${x} is less than ${y}, so borrow 1 from ${from}. Now ${x + 10} − ${y} = ${x + 10 - y}.`);
+      } else steps.push(`${name}: ${x} − ${y} = ${x - y}.`);
+    }
+  }
+  const shorter = String(add ? a + b : a - b).length < top.length;
+  steps.push(`Put the digits together, from the left.${shorter ? ' No need to write a 0 at the front.' : ''}`);
+  return steps;
+}
+
+// A tip for multiplying by a number like 60, 100 or 12.
+function timesTip(n, f) {
+  const zeros = String(f).match(/0*$/)[0].length;
+  if (zeros) return `Tip: do ${n} × ${f / 10 ** zeros}, then put ${zeros} zero${zeros > 1 ? 's' : ''} on the end.`;
+  if (f > 10) return `Tip: break it apart. ${n} × 10 + ${n} × ${f - 10}.`;
+  return '';
+}
+
+const halfOf = (n) => (n % 2 ? `${(n - 1) / 2}½` : String(n / 2));
+const multiples = (step, count) => Array.from({ length: count }, (_, i) => step * (i + 1)).join(', ');
+
 /* ---------------------------- Grade 2 ---------------------------- */
 
 function addition(level) {
@@ -119,10 +177,18 @@ function addition(level) {
           ones >= 10 ? 'Add each place, but never carry.' : `Take away instead: ${big} − ${small}.`,
         ],
       );
-  const base = { answer: String(sum), hint, why: reasoning, mistake: ones >= 10 ? byPlace(a, b, (x, y) => x + y) : undefined };
+  const steps = level === 1
+    ? [`Start with the bigger number: ${big}. Keep it in your head.`, `Count up ${small} more on your fingers, starting with ${big + 1}.`, 'What number did you stop on?']
+    : columnSteps(a, b, true);
+  const base = { answer: String(sum), hint, steps, why: reasoning, mistake: ones >= 10 ? byPlace(a, b, (x, y) => x + y) : undefined };
   if (Math.random() < 0.3) {
     const item = pick(ITEMS);
-    return { ...base, prompt: `${pick(NAMES)} has ${a} ${item} and gets ${b} more. How many ${item} now?`, word: true };
+    return {
+      ...base,
+      prompt: `${pick(NAMES)} has ${a} ${item} and gets ${b} more. How many ${item} now?`,
+      steps: [`"Gets more" means add: ${a} + ${b}.`, ...steps],
+      word: true,
+    };
   }
   return { ...base, prompt: `${a} + ${b} = ?` };
 }
@@ -143,10 +209,18 @@ function subtraction(level) {
         borrow ? 'Take the smaller digit from the bigger digit in each place.' : `Add them: ${a} + ${b} = ${a + b}.`,
         `Take away just the ones: ${a} − ${b % 10} = ${a - (b % 10)}.`,
       ]);
-  const base = { answer: String(a - b), hint, why: reasoning, mistake: borrow ? byPlace(a, b, (x, y) => Math.abs(x - y)) : undefined };
+  const steps = level === 1
+    ? [`Think addition: ${b} + ? = ${a}.`, `Start at ${b} and count up to ${a} on your fingers.`, 'How many fingers did you count?']
+    : columnSteps(a, b, false);
+  const base = { answer: String(a - b), hint, steps, why: reasoning, mistake: borrow ? byPlace(a, b, (x, y) => Math.abs(x - y)) : undefined };
   if (Math.random() < 0.3) {
     const item = pick(ITEMS);
-    return { ...base, prompt: `${pick(NAMES)} had ${a} ${item} and gave away ${b}. How many are left?`, word: true };
+    return {
+      ...base,
+      prompt: `${pick(NAMES)} had ${a} ${item} and gave away ${b}. How many are left?`,
+      steps: [`"Gave away" means take away: ${a} − ${b}.`, ...steps],
+      word: true,
+    };
   }
   return { ...base, prompt: `${a} − ${b} = ?` };
 }
@@ -160,6 +234,7 @@ function placeValue2(level) {
       prompt: `What digit is in the ${name} place of ${n}?`,
       answer: String(d),
       hint: 'The left digit is the tens. The right digit is the ones.',
+      steps: [`Look at ${n}. It has 2 digits.`, 'The left digit is the tens. The right digit is the ones.', `Point to the ${name} place. What digit is there?`],
       why: why(`${n} is ${t} tens and ${o} ones.`, [`${n} is ${o} tens and ${t} ones.`, `${n} is ${t + o} ones.`]),
       mistake: name === 'tens' ? o : t,
     };
@@ -172,6 +247,12 @@ function placeValue2(level) {
       prompt: `What number has ${parts.join(', ')}?`,
       answer: String(n),
       hint: 'Write the hundreds first, then tens, then ones. Use 0 for an empty place!',
+      steps: [
+        `Hundreds come first. Write the ${h}.`,
+        `Tens come next. Write the ${t}.${t === 0 ? ' A 0 holds the place!' : ''}`,
+        `Ones come last. Write the ${o}.${o === 0 ? ' A 0 holds the place!' : ''}`,
+        'Read the three digits together. What number is it?',
+      ],
       why: why(`${h} hundreds = ${h * 100}, ${t} tens = ${t * 10}, ${o} ones = ${o}. Together: ${n}.`, [
         `Add the digits: ${h} + ${t} + ${o} = ${h + t + o}.`,
         `Hundreds are worth 10 each, so ${h} hundreds is ${h * 10}.`,
@@ -188,6 +269,7 @@ function placeValue2(level) {
       prompt: `What digit is in the ${name} place of ${n}?`,
       answer: String(d),
       hint: 'Read the places from left to right: hundreds, tens, ones.',
+      steps: ['Read the places from left to right: hundreds, tens, ones.', `Point to the ${name} place in ${n}.`, 'What digit is there?'],
       why: why(`${n} is ${h} hundreds, ${t} tens and ${o} ones.`, [
         `${n} is ${o} hundreds, ${t} tens and ${h} ones.`,
         `Add the digits: ${h} + ${t} + ${o} = ${h + t + o}.`,
@@ -201,6 +283,12 @@ function placeValue2(level) {
     answer: String(d * mult),
     choices: shuffle([d, d * 10, d * 100]).map(String),
     hint: `Find which place the ${d} is in. A 3 in the tens place is worth 30!`,
+    steps: [
+      `Find the ${d} in ${n}.`,
+      'Which place is it in: hundreds, tens or ones?',
+      'In the ones place it means just itself. In the tens, add one 0. In the hundreds, add two 0s.',
+      `So what is the ${d} worth?`,
+    ],
     why: why(`The ${d} is in the ${name} place, so it means ${d} ${name} = ${d * mult}.`, [
       mult === 1 ? `Every digit is worth 10 times itself: ${d * 10}.` : `A digit is always worth just itself: ${d}.`,
       `The ${d} is in the ${other} place.`,
@@ -220,10 +308,16 @@ function skipCount(level) {
   if (down) seq = seq.reverse();
   const dir = down ? 'down' : 'up';
   const missing = rand(1, 4);
+  const k = missing <= 2 ? 3 : 0; // two numbers next to each other that are both shown
   return {
     prompt: seq.map((v, i) => (i === missing ? '__' : v)).join(', '),
     answer: String(seq[missing]),
     hint: `Each number goes ${dir} by ${step}.`,
+    steps: [
+      `Look at two numbers next to each other: ${seq[k]} and ${seq[k + 1]}.`,
+      `How far apart are they? Each number goes ${dir} by ${step}.`,
+      `The number before the blank is ${seq[missing - 1]}. ${seq[missing - 1]} ${down ? '−' : '+'} ${step} = ?`,
+    ],
     why: why(`It goes ${dir} by ${step} each time.`, [`It goes ${dir} by 1 each time.`, `It goes ${dir} by ${step * 2} each time.`]),
     mistake: seq[missing] + (down ? -1 : 1),
   };
@@ -241,7 +335,13 @@ function compare2(level) {
   const names = level === 1 ? ['tens', 'ones'] : ['hundreds', 'tens', 'ones'];
   const [da, db] = [String(a), String(b)];
   const i = [...da].findIndex((x, k) => x !== db[k]);
+  const steps = [`Look at the ${names[0]} first: ${da[0]} and ${db[0]}.`];
+  for (let k = 1; k <= (i < 0 ? names.length - 1 : i); k++) steps.push(`Same ${names[k - 1]}, so look at the ${names[k]}: ${da[k]} and ${db[k]}.`);
+  steps.push(i < 0
+    ? 'Every place is the same. What does that tell you?'
+    : `Which number has more ${names[i]}? The alligator mouth opens toward the bigger number!`);
   return {
+    steps,
     prompt: 'Which sign goes in the box?',
     visual: `<div class="eq">${a} ${box} ${b}</div>`,
     summary: `${a} ? ${b}`,
@@ -285,6 +385,25 @@ function money(level) {
   const values = counts.flatMap(([kind, c]) => Array(c).fill(MONEY[kind].value));
   let running = 0;
   const tally = values.map((v) => (running += v)).join(', ');
+  // Count on one kind of money at a time, biggest first.
+  const groups = counts.filter(([, c]) => c);
+  const steps = [];
+  let sofar = 0;
+  groups.forEach(([kind, c], g) => {
+    const m = MONEY[kind];
+    const marks = Array.from({ length: c }, (_, i) => `${sofar + m.value * (i + 1)}¢`);
+    const what = c > 1 ? m.many : `${m.one}`;
+    if (groups.length === 1) {
+      steps.push(`Each ${m.one} is worth ${m.value}¢.`, `Count the ${what} by ${m.value}s. Where do you end?`);
+    } else if (g === groups.length - 1) {
+      steps.push(`Last, the ${what}: ${m.value}¢${c > 1 ? ' each' : ''}. Count on from ${sofar}¢. Where do you end?`);
+    } else if (g === 0) {
+      steps.push(`Start with the biggest: the ${what}. ${marks.join(', ')}.`);
+    } else {
+      steps.push(`Count on the ${what} by ${m.value}s: ${marks.join(', ')}.`);
+    }
+    sofar += c * m.value;
+  });
   const wrong = [1, 5, 10]
     .map((each) => [values.length * each, `Every coin is worth ${each}¢: ${values.length * each}¢.`])
     .filter(([wrongTotal]) => wrongTotal !== total)
@@ -296,12 +415,44 @@ function money(level) {
     summary,
     answer: String(total),
     hint: `Start with the biggest and count on: ${level === 3 ? 'a dollar is 100¢, ' : ''}quarters 25¢, dimes 10¢, nickels 5¢, pennies 1¢.`,
+    steps,
     why: why(`Count on from the biggest: ${tally}.`, wrong),
     mistake: values.length > 1 ? total - values[values.length - 1] : total + 1,
   };
 }
 
 /* ---------------------------- Grade 4 ---------------------------- */
+
+// Steps for a times fact, using the friendliest trick.
+function factSteps(a, b) {
+  const [lo, hi] = [Math.min(a, b), Math.max(a, b)];
+  if (lo === 1) return ['Anything times 1 is just itself.', `So what is ${a} × ${b}?`];
+  if (lo === 10 || hi === 10) {
+    const o = a === 10 ? b : a;
+    return ['Times 10 is easy: put a 0 on the end.', `What is ${o} with a 0 on the end?`];
+  }
+  if (a === 9 || b === 9) {
+    const o = a === 9 ? b : a;
+    return [`Start with 10 × ${o} = ${10 * o}.`, `9 × ${o} is one ${o} less than that.`, `${10 * o} − ${o} = ?`];
+  }
+  const easy = [2, 5].find((x) => x === a || x === b);
+  if (easy || lo <= 4) {
+    const by = easy ?? hi;
+    const times = by === a ? b : a;
+    return [
+      `${a} × ${b} means ${times} groups of ${by}.`,
+      `Skip count by ${by}s and hold up a finger each time: ${multiples(by, Math.min(3, times - 1))}…`,
+      `Keep going until you have ${times} fingers up. Where do you land?`,
+    ];
+  }
+  // Both 6 or more: break the bigger one into 5 (or 10) and the rest.
+  const chunk = hi > 10 ? 10 : 5;
+  return [
+    `Break ${hi} into ${chunk} + ${hi - chunk}.`,
+    `${chunk} × ${lo} = ${chunk * lo}. ${hi - chunk} × ${lo} = ${(hi - chunk) * lo}.`,
+    `Add them: ${chunk * lo} + ${(hi - chunk) * lo} = ?`,
+  ];
+}
 
 function multFacts(level) {
   let a, b;
@@ -311,12 +462,14 @@ function multFacts(level) {
   if (Math.random() < 0.5) [a, b] = [b, a];
   let hint = `${a} × ${b} means ${a} groups of ${b}. Try skip counting by ${b}!`;
   if (a === 9 || b === 9) hint = `9s trick: 10 × ${a === 9 ? b : a} = ${(a === 9 ? b : a) * 10}, then take away one ${a === 9 ? b : a}.`;
+  const steps = factSteps(a, b);
   const multiples = Array.from({ length: a }, (_, i) => b * (i + 1));
   const counted = a <= 6 ? multiples.join(', ') : `${multiples.slice(0, 3).join(', ')} … ${a * b}`;
   return {
     prompt: `${a} × ${b} = ?`,
     answer: String(a * b),
     hint,
+    steps,
     why: why(`Skip count by ${b}, ${a} times: ${counted}.`, [
       a + b === a * b ? `Count by 1s up to ${b}.` : `Add them: ${a} + ${b} = ${a + b}.`,
       `Put the digits side by side: ${a}${b}.`,
@@ -334,10 +487,23 @@ function multBig(level) {
     const parts = placeParts(a);
     // Forgetting to carry: multiply each digit and keep only the last digit.
     const noCarry = String(a).split('').reverse().reduce((sum, d, i) => sum + ((Number(d) * b) % 10) * 10 ** i, 0);
+    const lead = parts[0];
+    const zeros = String(lead).length - 1;
+    const d0 = lead / 10 ** zeros;
+    const zeroTip = `Tip: for ${fmt(lead)} × ${b}, do ${d0} × ${b} = ${d0 * b}, then put ${zeros} zero${zeros > 1 ? 's' : ''} on the end.`;
+    const steps = parts.length === 1
+      ? [`Do ${d0} × ${b} = ${d0 * b}.`, `Then put ${zeros} zero${zeros > 1 ? 's' : ''} on the end. What do you get?`]
+      : [
+          `Break ${fmt(a)} into ${parts.map(fmt).join(' + ')}.`,
+          zeroTip,
+          `Multiply each part by ${b}: ${parts.map((p) => `${fmt(p)} × ${b} = ${fmt(p * b)}`).join(', ')}.`,
+          `Add them up: ${parts.map((p) => fmt(p * b)).join(' + ')} = ?`,
+        ];
     return {
       prompt: `${fmt(a)} × ${b} = ?`,
       answer: String(a * b),
       hint: `Break it apart: ${parts.map((p) => `${fmt(p)} × ${b}`).join(' + ')}`,
+      steps,
       why: why(
         `Break ${fmt(a)} into ${parts.map(fmt).join(' + ')}. Multiply each part by ${b}, then add: ${parts.map((p) => fmt(p * b)).join(' + ')} = ${fmt(a * b)}.`,
         [`Only multiply the ones: ${a % 10} × ${b} = ${(a % 10) * b}.`, `Add instead: ${fmt(a)} + ${b} = ${fmt(a + b)}.`],
@@ -358,6 +524,12 @@ function multBig(level) {
     prompt: `${a} × ${b} = ?`,
     answer: String(a * b),
     hint: `Break it apart: ${parts.map((p) => `${a} × ${p}`).join(' + ')}`,
+    steps: [
+      `Break ${b} into ${tens} + ${ones}.`,
+      `${a} × ${tens}: do ${a} × ${tens / 10} = ${fmt((a * tens) / 10)}, then put a 0 on the end: ${fmt(a * tens)}.`,
+      `${a} × ${ones} = ${fmt(a * ones)}.`,
+      `Add them: ${fmt(a * tens)} + ${fmt(a * ones)} = ?`,
+    ],
     why: why(
       `Break ${b} into ${parts.join(' + ')}. ${parts.map((p) => `${a} × ${p} = ${fmt(a * p)}`).join(', ')}. Add: ${fmt(a * b)}.`,
       [`Multiply tens by tens and ones by ones, then add: ${fmt(tensOnly)}.`, `Add instead: ${a} + ${b} = ${a + b}.`],
@@ -373,11 +545,30 @@ function division(level) {
   else if (level === 2) { d = rand(2, 9); q = rand(3, 30); r = Math.random() < 0.5 ? rand(1, d - 1) : 0; }
   else { d = rand(3, 9); q = rand(12, 150); r = Math.random() < 0.6 ? rand(1, d - 1) : 0; }
   const n = d * q + r;
+  let steps;
+  if (q <= 10) {
+    steps = r
+      ? [
+          `Count by ${d}s: ${multiples(d, Math.min(2, q - 1))}… Stop before you go past ${fmt(n)}.`,
+          `How many ${d}s did you count? That's the first part of the answer.`,
+          `${fmt(n)} minus the last number you said is the remainder (R).`,
+        ]
+      : [`Think backwards: ${d} × ? = ${fmt(n)}.`, `Skip count by ${d}s: ${multiples(d, Math.max(1, Math.min(3, q - 1)))}…`, `How many ${d}s did it take to reach ${fmt(n)}?`];
+  } else {
+    const chunk = q % 10 ? q - (q % 10) : q - 10; // take out a big group of tens first
+    const left = n - d * chunk;
+    steps = [
+      `Take out a big chunk first: ${d} × ${chunk} = ${fmt(d * chunk)}. (${d} × ${chunk / 10} = ${fmt((d * chunk) / 10)}, then add a 0.)`,
+      `What's left: ${fmt(n)} − ${fmt(d * chunk)} = ${fmt(left)}.`,
+      `How many ${d}s fit in ${fmt(left)}?${r ? ' Anything left over is the remainder (R).' : ''}`,
+      `Add the groups: ${chunk} + that number = ?`,
+    ];
+  }
   const reasoning = why(
     r ? `${d} × ${q} = ${fmt(d * q)}, and ${r} is left over.` : `${d} × ${q} = ${fmt(n)}, so ${fmt(n)} ÷ ${d} = ${q}.`,
     [`${d} × ${q + 1} = ${fmt(d * (q + 1))}, and that fits.`, `Take away ${d} once: ${fmt(n)} − ${d} = ${fmt(n - d)}.`],
   );
-  if (!r) return { prompt: `${fmt(n)} ÷ ${d} = ?`, answer: String(q), hint: `Think backwards: ${d} × ? = ${fmt(n)}`, why: reasoning, mistake: q + 1 };
+  if (!r) return { prompt: `${fmt(n)} ÷ ${d} = ?`, answer: String(q), hint: `Think backwards: ${d} × ? = ${fmt(n)}`, steps, why: reasoning, mistake: q + 1 };
   const label = (qq, rr) => `${qq} R${rr}`;
   const options = new Set([label(q, r), label(q + 1, r), label(q - 1, r), label(q, r === d - 1 ? r - 1 : r + 1)]);
   return {
@@ -385,6 +576,7 @@ function division(level) {
     answer: label(q, r),
     choices: shuffle([...options]),
     hint: `Find the biggest number that times ${d} is ${fmt(n)} or less. What's left over is the remainder (R).`,
+    steps,
     why: reasoning,
     mistake: label(q - 1, r + d), // remainder bigger than the divisor
   };
@@ -413,6 +605,11 @@ function equivFractions(level) {
     summary: `${left[0]}/${left[1]} = ${missingTop ? `?/${right[1]}` : `${right[0]}/?`}`,
     answer: String(missingTop ? right[0] : right[1]),
     hint: `What was ${known[0]} ${verb} by to make ${known[1]}? Do the same to the ${missingTop ? 'top' : 'bottom'}!`,
+    steps: [
+      `Look at the ${missingTop ? 'bottoms' : 'tops'}: ${known[0]} and ${known[1]}.`,
+      `${known[0]} ${simplify ? '÷' : '×'} ${k} = ${known[1]}. So it was ${verb} by ${k}.`,
+      `Do the same to the ${missingTop ? 'top' : 'bottom'}: ${missingTop ? left[0] : left[1]} ${simplify ? '÷' : '×'} ${k} = ?`,
+    ],
     why: why(
       `${simplify ? 'Divide' : 'Multiply'} the top and the bottom by the same number, ${k}. The bars show the same amount.`,
       ['Add the same number to the top and the bottom.', 'Only change the bottom number. The top stays the same.'],
@@ -452,19 +649,35 @@ function compareFractions(level) {
   // Pick the clearest explanation for this pair.
   const [A, C] = [`${a}/${b}`, `${c}/${d}`];
   const half = (x, y) => Math.sign(2 * x - y); // -1 below 1/2, 0 at 1/2, 1 above
-  let right;
+  let right, steps;
+  const sign = 'Which sign fits?';
   let wrong = ['A bigger bottom number means a bigger fraction.', 'A bigger top number always means a bigger fraction.'];
-  if (answer === '=') right = `They're the same amount: multiply the top and bottom of ${A} by ${c / a} to get ${C}.`;
-  else if (b === d) {
+  if (answer === '=') {
+    right = `They're the same amount: multiply the top and bottom of ${A} by ${c / a} to get ${C}.`;
+    steps = [`Try making ${A} look like ${C}. What do you multiply ${b} by to get ${d}?`, `Multiply the top and bottom of ${A} by ${d / b}: ${a} × ${d / b} and ${b} × ${d / b}.`, `Compare what you get with ${C}. ${sign}`];
+  } else if (b === d) {
     right = `Same size pieces, so more pieces is bigger: ${Math.max(a, c)} pieces beats ${Math.min(a, c)}.`;
     wrong = ['A bigger bottom number means a bigger fraction.', "They have the same bottom, so they're equal."];
-  } else if (a === c) right = `Both have ${a} pieces, but cutting into ${Math.min(b, d)} makes bigger pieces than cutting into ${Math.max(b, d)}.`;
-  else if (half(a, b) * half(c, d) < 0) {
+    steps = [`The bottoms are the same (${b}), so the pieces are the same size.`, `Compare the tops: ${a} pieces and ${c} pieces.`, `More pieces of the same size is more. ${sign}`];
+  } else if (a === c) {
+    right = `Both have ${a} pieces, but cutting into ${Math.min(b, d)} makes bigger pieces than cutting into ${Math.max(b, d)}.`;
+    steps = [`The tops are the same: ${a} piece${a > 1 ? 's' : ''} each.`, `Compare the bottoms: ${b} and ${d}. Cutting into more pieces makes each piece smaller.`, `Which fraction has the bigger pieces? ${sign}`];
+  } else if (half(a, b) * half(c, d) < 0) {
     const [more, less] = half(a, b) > 0 ? [A, C] : [C, A];
     right = `${more} is more than half, and ${less} is less than half.`;
+    steps = [
+      'Compare each fraction to 1/2.',
+      `Half of ${b} is ${halfOf(b)}. Is ${a} more or less than that? Half of ${d} is ${halfOf(d)}. Is ${c} more or less?`,
+      `The one that's more than half is bigger. ${sign}`,
+    ];
   } else {
     const L = (b * d) / gcd(b, d);
     right = `Make the bottoms the same: ${A} = ${(a * L) / b}/${L} and ${C} = ${(c * L) / d}/${L}.`;
+    steps = [
+      `Make the bottoms the same. ${b} and ${d} both go into ${L}.`,
+      `${A} = ${(a * L) / b}/${L}. ${C} = ${(c * L) / d}/${L}.`,
+      `Now the pieces are the same size, so compare the tops. ${sign}`,
+    ];
   }
 
   return {
@@ -478,6 +691,7 @@ function compareFractions(level) {
       : level === 2
         ? 'Look at how much of each bar is colored. You can also compare each fraction to 1/2.'
         : 'Make the bottoms the same, or compare each fraction to 1/2.',
+    steps,
     why: why(right, wrong, bars),
     mistake: { '<': '>', '>': '<', '=': pick(['<', '>']) }[answer],
   };
@@ -508,6 +722,11 @@ function rounding(level) {
     prompt: `Round ${fmt(n)} to the nearest ${name}.`,
     answer: String(answer),
     hint: `Look at the ${rightName} digit: it's ${rightDigit}. 5 or more → round up. 4 or less → round down.`,
+    steps: [
+      `${fmt(n)} is between ${fmt(low)} and ${fmt(high)}.`,
+      `Look at the ${rightName} digit, just to the right of the ${name}s place: it's ${rightDigit}.`,
+      `5 or more rounds up to ${fmt(high)}. 4 or less rounds down to ${fmt(low)}. Which one?`,
+    ],
     why: why(
       n - low === place / 2 ? `${fmt(n)} is exactly halfway, and halfway rounds up to ${fmt(high)}.` : `${fmt(n)} is closer to ${fmt(answer)} than to ${fmt(other)}.`,
       [`The ${rightName} digit is ${rightDigit}, so round ${up ? 'down' : 'up'}.`, `Always round ${up ? 'down' : 'up'}.`],
@@ -530,6 +749,12 @@ function placeValue4(level) {
     answer: fmt(d * 10 ** power),
     choices: shuffle([power, ...otherPowers]).map((p) => fmt(d * 10 ** p)),
     hint: `From the right: ones, tens, hundreds, thousands${size > 4 ? ', ten-thousands, hundred-thousands' : ''}${size > 6 ? ', millions' : ''}.`,
+    steps: [
+      `Find the ${d} in ${fmt(n)}.`,
+      'Count the places from the right: ones, tens, hundreds, thousands…',
+      `The ${d} is in the ${PLACE_WORDS[power]} place.`,
+      `So it's worth ${d} × ${fmt(10 ** power)}. Which choice is that?`,
+    ],
     why: why(`The ${d} is in the ${PLACE_WORDS[power]} place, so it's worth ${d} × ${fmt(10 ** power)} = ${fmt(d * 10 ** power)}.`, [
       power === 0 ? `Every digit is worth 10 times itself: ${d * 10}.` : `A digit is always worth just itself: ${d}.`,
       `The ${d} is in the ${wrongPlace} place.`,
@@ -655,6 +880,17 @@ function time(level) {
       answer,
       choices: choicesFrom(answer, [crosses ? sameHour : clockTime(nextHour(h2), m2), clockTime(nextHour(h2), m2), clockTime(h2, (m2 + 10) % 60)]),
       hint: crosses ? `Count on to ${clockTime(nextHour(h), 0)} first. That's ${60 - m} minutes. Then count the rest.` : 'Count on by 5s with the long hand.',
+      steps: crosses
+        ? [
+            `Start at ${start}.`,
+            `${60 - m} minutes gets you to the next hour: ${clockTime(nextHour(h), 0)}.`,
+            ...(n > 60 - m ? [`You still need ${n} − ${60 - m} = ${n - (60 - m)} more minutes.`, `What time is ${n - (60 - m)} minutes after ${clockTime(nextHour(h), 0)}?`] : ['So what time is it?']),
+          ]
+        : [
+            `Start at ${start}. The long hand is on the ${m / 5 || 12}.`,
+            `${n} minutes is ${n / 5} jumps of 5 minutes.`,
+            `Where does the long hand land? The hour stays ${h}.`,
+          ],
       why: why(
         crosses
           ? `Count on ${60 - m} minutes to ${clockTime(nextHour(h), 0)}, then ${n - (60 - m)} more: ${answer}.`
@@ -678,6 +914,16 @@ function time(level) {
     answer,
     choices: choicesFrom(answer, [swapped, hourOff, clockTime(h, hand % 12 === 0 ? 12 : hand)]),
     hint: 'The short hand is the hour. The long hand is the minutes: count by 5s for each number!',
+    steps: m === 0
+      ? [`The short hand shows the hour. It points to the ${h}.`, "The long hand is on the 12. That means o'clock: :00.", 'So what time is it?']
+      : [
+          m >= 30
+            ? `The short hand shows the hour. It's between the ${h} and the ${nextHour(h)}. The hour is the number it already passed: ${h}.`
+            : `The short hand shows the hour. It's just past the ${h}.`,
+          `The long hand shows the minutes. It's on the ${hand}.`,
+          `Count by 5s up to the ${hand}: ${multiples(5, Math.max(1, Math.min(3, hand - 1)))}…`,
+          'Put the hour and the minutes together.',
+        ],
     why: why(
       m === 0
         ? `The short hand is on the ${h} and the long hand is on the 12, so it's ${h} o'clock.`
@@ -705,6 +951,11 @@ function evenOdd(level) {
       answer,
       choices: EVEN_ODD,
       hint: `Look at the ones digits. Is ${a} even or odd? Is ${b}?`,
+      steps: [
+        `Look at the ones digits: ${a % 10} and ${b % 10}.`,
+        `Is ${a} even or odd? Is ${b}?`,
+        'Even + even = even. Odd + odd = even. Even + odd = odd. Which one is this?',
+      ],
       why: why(`${a} is ${pa.toLowerCase()} and ${b} is ${pb.toLowerCase()}. ${pa} + ${pb.toLowerCase()} = ${answer.toLowerCase()}.`, [
         `Just look at the first number: ${a} is ${pa.toLowerCase()}.`,
         `${pa} + ${pb.toLowerCase()} = ${other(answer).toLowerCase()}.`,
@@ -722,6 +973,7 @@ function evenOdd(level) {
       answer,
       choices: EVEN_ODD,
       hint: 'Even numbers make pairs with no dot left over.',
+      steps: ['Look at the dots. They are in pairs, like partners.', 'Does every dot have a partner?', 'One dot left over means odd. No dot left over means even.'],
       why: answer === 'Even'
         ? why(`Every dot has a partner, so ${n} is even.`, ['One dot is left with no partner.', `Numbers that end in ${ones} are odd.`])
         : why(`One dot is left with no partner, so ${n} is odd.`, ['Every dot has a partner.', `Numbers that end in ${ones} are even.`]),
@@ -734,6 +986,7 @@ function evenOdd(level) {
     answer,
     choices: EVEN_ODD,
     hint: 'Only the ones digit matters. Is it 0, 2, 4, 6 or 8?',
+    steps: [`Find the ones digit of ${n}: it's ${ones}.`, 'Even digits are 0, 2, 4, 6 and 8.', `Is ${ones} one of them?`],
     why: why(`The ones digit is ${ones}, and ${ones} is ${answer.toLowerCase()}. Only the ones digit matters.`, [
       parity(first) !== answer ? `The first digit is ${first}, so it's ${parity(first).toLowerCase()}.` : 'Big numbers are always even.',
       `Numbers that end in ${ones} are ${other(answer).toLowerCase()}.`,
@@ -762,6 +1015,7 @@ function equalGroups(level) {
       answer,
       choices: shuffle([answer, `${rows} + ${cols}`, adds(rows + 1)]),
       hint: 'Count how many are in one row. Then count the rows.',
+      steps: ['Count how many are in one row.', 'Count how many rows there are.', 'Add the number in one row once for every row. Which one matches?'],
       why: why(`There are ${rows} rows with ${cols} in each row, so add ${cols} ${rows} times.`, [
         `Add the number of rows and the number in a row: ${rows} + ${cols}.`,
         `There are ${rows + 1} rows.`,
@@ -775,6 +1029,12 @@ function equalGroups(level) {
     summary: `${rows} rows of ${cols}`,
     answer: String(total),
     hint: `Count by ${cols}s, one row at a time.`,
+    steps: [
+      `Count the ${item} in one row: ${cols}.`,
+      `Count the rows: ${rows}.`,
+      `Count by ${cols}s, one row at a time: ${multiples(cols, rows - 1)}…`,
+      'What number do you say for the last row?',
+    ],
     why: why(`${rows} rows of ${cols}: ${adds(rows)} = ${total}.`, [`Count one row: ${cols}.`, `Add the rows and the columns: ${rows} + ${cols} = ${rows + cols}.`]),
     mistake: rows + cols,
   };
@@ -816,6 +1076,11 @@ function graphs(level) {
     const longest = t === top ? low : top;
     return ask(`How many kids picked ${t.name}?`, {
       answer: String(t.v),
+      steps: [
+        `Find the ${t.name} ${unit}.`,
+        pictures ? 'Touch each picture as you count it.' : 'Put your finger at the end of the bar.',
+        pictures ? 'How many pictures?' : 'Slide down to the numbers. Which number is it on?',
+      ],
       why: why(pictures ? `Count the pictures in the ${t.name} row: ${t.v}.` : `The ${t.name} bar ends at ${t.v}.`, [
         `Count every ${unit}: ${sum}.`,
         `Look at the ${longest === top ? 'longest' : 'shortest'} ${unit}: ${longest.v}.`,
@@ -828,6 +1093,7 @@ function graphs(level) {
     return ask('Which did the most kids pick?', {
       answer: top.name,
       choices: rows.map((r) => r.name),
+      steps: [`Look at every ${unit}.`, `Find the longest ${unit}. That's the most kids.`, 'Which one is it?'],
       why: why(`The ${top.name} ${unit} is the longest: ${top.v} kids.`, [
         `${cap(first.name)} is ${first === rows[0] ? 'at the top' : 'at the bottom'} of the graph, so it's the most.`,
         `The shortest ${unit} wins.`,
@@ -839,6 +1105,7 @@ function graphs(level) {
     const prompt = kind === 'more' ? `How many more kids picked ${A.name} than ${B.name}?` : `How many fewer kids picked ${B.name} than ${A.name}?`;
     return ask(prompt, {
       answer: String(A.v - B.v),
+      steps: [`Find ${A.name}: ${A.v}.`, `Find ${B.name}: ${B.v}.`, `"How many ${kind}" means subtract: ${A.v} − ${B.v} = ?`],
       why: why(`${cap(A.name)}: ${A.v}. ${cap(B.name)}: ${B.v}. ${A.v} − ${B.v} = ${A.v - B.v}.`, [
         `Add them: ${A.v} + ${B.v} = ${A.v + B.v}.`,
         `Just read the ${A.name} ${unit}: ${A.v}.`,
@@ -849,12 +1116,18 @@ function graphs(level) {
   if (kind === 'two') {
     return ask(`How many kids picked ${A.name} or ${B.name}?`, {
       answer: String(A.v + B.v),
+      steps: [`Find ${A.name}: ${A.v}.`, `Find ${B.name}: ${B.v}.`, `"Or" means put them together: ${A.v} + ${B.v} = ?`],
       why: why(`Add the two ${unit}s: ${A.v} + ${B.v} = ${A.v + B.v}.`, [`Subtract: ${A.v} − ${B.v} = ${A.v - B.v}.`, `Count every ${unit}: ${sum}.`]),
       mistake: A.v - B.v,
     });
   }
   return ask('How many kids voted in all?', {
     answer: String(sum),
+    steps: [
+      `Read every ${unit}: ${values.join(', ')}.`,
+      `Add two at a time. ${values[0]} + ${values[1]} = ${values[0] + values[1]}.`,
+      `Now add the rest: ${[values[0] + values[1], ...values.slice(2)].join(' + ')} = ?`,
+    ],
     why: why(`Add every ${unit}: ${values.join(' + ')} = ${sum}.`, [`Read the longest ${unit}: ${top.v}.`, `Count the ${unit}s: ${k}.`]),
     mistake: top.v,
   });
@@ -874,6 +1147,7 @@ function shapes(level) {
       spoken: '',
       answer: String(n),
       hint: `Put your finger on one ${one} and go around. Count each ${one} once!`,
+      steps: [`Put your finger on one ${one}.`, `Go around the shape and count each ${one}: 1, 2, 3…`, 'Stop when you get back to the start. How many?'],
       why: why(`Go around and count each ${one} once: ${Array.from({ length: n }, (_, i) => i + 1).join(', ')}.`, [
         `Skip the bottom ${one}: ${n - 1}.`,
         n === 4 ? 'Count only the top ones: 2.' : `Every shape has 4 ${word}.`,
@@ -892,6 +1166,7 @@ function shapes(level) {
       answer,
       choices: Object.values(SHARE_NAMES),
       hint: 'Count all the equal parts. How many are shaded?',
+      steps: ['Count all the equal parts.', 'How many parts are shaded? Just 1.', '1 of 2 equal parts is a half. 1 of 3 is a third. 1 of 4 is a fourth. Which is it?'],
       why: why(`It's cut into ${k} equal parts and 1 is shaded: ${answer}.`, [
         k === 2 ? 'It has 2 parts, so each part is a fourth.' : 'One part is shaded, so it is always a half.',
         `There are ${k} parts plus the shaded one, so it's 1 out of ${k + 1}.`,
@@ -908,6 +1183,7 @@ function shapes(level) {
       answer: s.name,
       choices: shuffle([s.name, ...others.map((x) => x.name)]),
       hint: 'Tri- means 3, penta- means 5, hexa- means 6, octo- means 8.',
+      steps: [`The shape has ${s.sides} sides.`, 'Tri- means 3, penta- means 5, hexa- means 6, octo- means 8.', 'Which name starts with the right number word?'],
       why: why(`${cap(aOrAn(s.name))} has ${s.sides} sides and ${s.sides} corners.`, [`${cap(aOrAn(others[0].name))} has ${s.sides} sides.`, 'More corners means fewer sides.']),
       word: true,
     };
@@ -924,6 +1200,9 @@ function shapes(level) {
     answer: s.name,
     choices: shuffle([s.name, ...others.map((x) => x.name)]),
     hint: 'Count the sides first. Then look at the corners.',
+    steps: s.sides === 4
+      ? ['Count the sides. How many?', '4 sides with square corners is a square or a rectangle. If not, it\'s a trapezoid.', 'All 4 sides the same length? Square. 2 long and 2 short? Rectangle.']
+      : ['Count the sides. How many?', '3 sides: triangle. 5: pentagon. 6: hexagon. 8: octagon.', 'Which name matches?'],
     why: why(s.why, [`It has ${s.sides} sides, so it's ${aOrAn(others[0].name)}.`, `It's ${aOrAn(others[1].name)} because it's big.`]),
   };
 }
@@ -957,13 +1236,14 @@ function addSubBig(level) {
   const hint = zeros
     ? `Borrowing across zeros: take 1 from the ${fmt(a / lo)} in front, and the zeros become 9s.`
     : `Line up the places. Start with the ones and ${add ? 'carry when a place makes 10 or more' : 'borrow when the top digit is smaller'}.`;
-  const base = { answer: String(answer), hint, why: reasoning, mistake: carry ? (add ? byPlace(a, b, (x, y) => x + y) : byPlace(a, b, (x, y) => Math.abs(x - y))) : undefined };
+  const steps = columnSteps(a, b, add);
+  const base = { answer: String(answer), hint, steps, why: reasoning, mistake: carry ? (add ? byPlace(a, b, (x, y) => x + y) : byPlace(a, b, (x, y) => Math.abs(x - y))) : undefined };
   if (Math.random() < 0.3) {
     const name = pick(NAMES);
     const prompt = add
       ? pick([`A stadium had ${fmt(a)} fans on Saturday and ${fmt(b)} on Sunday. How many fans came in all?`, `${name} scored ${fmt(a)} points, then ${fmt(b)} more. How many points in all?`])
       : pick([`A library had ${fmt(a)} books and lent out ${fmt(b)}. How many books are left?`, `A game needs ${fmt(a)} points to win. ${name} has ${fmt(b)}. How many more points are needed?`]);
-    return { ...base, prompt, word: true };
+    return { ...base, prompt, steps: [`Write it as a number sentence: ${fmt(a)} ${add ? '+' : '−'} ${fmt(b)}.`, ...steps], word: true };
   }
   return { ...base, prompt: `${fmt(a)} ${add ? '+' : '−'} ${fmt(b)} = ?` };
 }
@@ -983,6 +1263,7 @@ function factors(level) {
       answer: yes ? 'Yes' : 'No',
       choices: ['Yes', 'No'],
       hint: `Skip count by ${f}. Do you land right on ${n}?`,
+      steps: [`Skip count by ${f}: ${multiples(f, 3)}…`, `Keep going until you reach ${n} or go past it.`, `Did you land right on ${n}? Or think: ${f} × ? = ${n}.`],
       why: yes
         ? why(`${f} × ${n / f} = ${n}, so ${f} is a factor of ${n}.`, [`A number's only factors are 1 and itself.`, `${f} + ${n / f} = ${f + n / f}, not ${n}.`])
         : why(`${f} × ${q} = ${f * q} and ${f} × ${q + 1} = ${f * (q + 1)}. ${n} is in between, so ${f} is not a factor.`, [
@@ -1010,6 +1291,7 @@ function factors(level) {
       answer: String(answer),
       choices: shuffle([answer, endsLike, ...near]).map(String),
       hint: `Skip count by ${f}: ${f}, ${f * 2}, ${f * 3}… Which number do you land on?`,
+      steps: [`Skip count by ${f}: ${multiples(f, 3)}…`, `Careful: ending in ${f} doesn't make a number a multiple of ${f}.`, 'Check each choice. Which one do you land right on?'],
       why: why(`${f} × ${k} = ${answer}, so ${answer} is a multiple of ${f}.`, [
         `${endsLike} ends in ${f}, so it's a multiple of ${f}.`,
         `${near[0]} is close to ${f} × ${nearK} = ${f * nearK}, so it counts.`,
@@ -1027,6 +1309,12 @@ function factors(level) {
     answer: prime ? 'Prime' : 'Composite',
     choices: ['Prime', 'Composite'],
     hint: 'A prime number has exactly 2 factors: 1 and itself. Can you make it with a times fact?',
+    steps: [
+      'Prime means only 1 and itself go in evenly.',
+      `Is ${n} even? Then 2 goes in${n === 2 ? ', but 2 is the number itself' : ''}.`,
+      `Try 3, 5 and 7 too${[3, 5, 7].includes(n) ? ` (not ${n} itself)` : ''}. Does any of them go in evenly?`,
+      'Something besides 1 and itself goes in? Composite. Nothing? Prime.',
+    ],
     why: prime
       ? why(`${n}'s only factors are 1 and ${n}, so it's prime.`, [
           n === 2 ? 'Even numbers are never prime.' : `${n} is odd, and odd numbers always have lots of factors.`,
@@ -1058,6 +1346,7 @@ function areaPerimeter(level) {
         prompt: `This rectangle's area is ${A} square ${unitName}. One side is ${w} ${unitName}. How long is the other side?`,
         summary: `Area ${A}, one side ${w}: other side?`,
         hint: `Think: ${w} × ? = ${A}`,
+        steps: ['Area = one side × the other side.', `You know one side is ${w}. So ${w} × ? = ${A}.`, `Skip count by ${w}s until you reach ${A}. How many jumps?`],
         why: why(`Area = side × side, and ${w} × ${l} = ${A}. So the other side is ${l}.`, [`Subtract: ${A} − ${w} = ${A - w}.`, `Multiply: ${A} × ${w} = ${A * w}.`]),
         mistake: A - w,
       };
@@ -1067,6 +1356,11 @@ function areaPerimeter(level) {
       prompt: `This rectangle's perimeter is ${P} ${unitName}. One side is ${w} ${unitName}. How long is the other side?`,
       summary: `Perimeter ${P}, one side ${w}: other side?`,
       hint: `There are two sides of ${w}. Take them away, then split what's left between the other two sides.`,
+      steps: [
+        `A rectangle has two sides of ${w}. Together they make ${2 * w}.`,
+        `Take those away: ${P} − ${2 * w} = ${P - 2 * w}. That's the other two sides together.`,
+        `Split ${P - 2 * w} into 2 equal sides: ${P - 2 * w} ÷ 2 = ?`,
+      ],
       why: why(`The two ${w} ${unit} sides make ${2 * w}. ${P} − ${2 * w} = ${P - 2 * w} for the other two sides, so each one is ${l}.`, [
         `Subtract one side: ${P} − ${w} = ${P - w}.`,
         `Take away both ${w}s and stop: ${P} − ${2 * w} = ${P - 2 * w}.`,
@@ -1083,6 +1377,14 @@ function areaPerimeter(level) {
       spoken,
       answer: String(A),
       hint: level === 1 ? 'Area is the squares inside. Count one row, then count the rows.' : `Area is the squares inside: multiply the two sides.`,
+      steps: level === 1
+        ? [`Count the squares in one row: ${l}.`, `Count the rows: ${w}.`, `${w} rows of ${l}: ${w} × ${l} = ?`]
+        : [
+            'Area is the squares inside. Multiply the two sides.',
+            ...(l > 10
+              ? [`Break ${l} into 10 + ${l - 10}. 10 × ${w} = ${10 * w}. ${l - 10} × ${w} = ${(l - 10) * w}.`, `Add them: ${10 * w} + ${(l - 10) * w} = ?`]
+              : [`${l} × ${w} = ?`]),
+          ],
       why: why(`Area is the squares inside: ${w} rows of ${l}, so ${l} × ${w} = ${A}.`, [`Add all four sides: ${P}.`, `Add the two sides: ${l} + ${w} = ${l + w}.`]),
       mistake: P !== A ? P : l + w,
       word: true,
@@ -1095,6 +1397,12 @@ function areaPerimeter(level) {
     spoken,
     answer: String(P),
     hint: 'Perimeter is the distance all the way around. Add all 4 sides!',
+    steps: [
+      'Perimeter goes all the way around: 4 sides.',
+      `The sides are ${l}, ${w}, ${l} and ${w}.`,
+      `The two ${l}s make ${2 * l}. The two ${w}s make ${2 * w}.`,
+      `${2 * l} + ${2 * w} = ?`,
+    ],
     why: why(`Perimeter is the distance around: ${l} + ${w} + ${l} + ${w} = ${P}.`, [`Multiply the sides: ${l} × ${w} = ${A}.`, `Add the two sides you see: ${l} + ${w} = ${l + w}.`]),
     mistake: l + w,
     word: true,
@@ -1131,6 +1439,12 @@ function addFractions(level) {
     answer,
     choices: choicesFrom(answer, candidates.filter((c) => !c.startsWith('0/'))),
     hint: 'Same size pieces? Just add (or take away) the top numbers. The bottom number stays the same!',
+    steps: [
+      `The bottoms are all ${d}, so every piece is the same size: ${DEN_WORDS[d]}.`,
+      `Keep the bottom number: ${d}.`,
+      `${subtract ? 'Take away' : 'Add'} the tops: ${tops.join(op)} = ?`,
+      `Write your answer over ${d}.`,
+    ],
     why: subtract
       ? why(`The pieces are all ${DEN_WORDS[d]}, so take away the tops: ${a} − ${b} = ${top}. The bottom stays ${d}.`, [
           'Subtract the tops and subtract the bottoms too.',
@@ -1163,6 +1477,7 @@ function decimals(level) {
         answer,
         choices: shuffle([answer, `0.0${t}`, `${t}.0`]),
         hint: 'Tenths go in the first place right after the decimal point.',
+        steps: [`${t}/10 means ${t} tenths.`, 'Tenths go in the first place right after the decimal point.', 'Write a 0, then the point, then the tenths digit. Which choice matches?'],
         why: why(`${t} tenths: the ${t} goes in the tenths place, right after the point: 0.${t}.`, [
           `Tenths are two places after the point: 0.0${t}.`,
           `The ${t} is a whole number: ${t}.0.`,
@@ -1177,6 +1492,7 @@ function decimals(level) {
       answer,
       choices: shuffle([answer, `${t}/100`, `1/${t}`]),
       hint: 'The first place after the point is tenths.',
+      steps: [`Look at 0.${t}. The ${t} is right after the point.`, 'The first place after the point is tenths, so the bottom is 10.', `So it's ${t} tenths. Which choice matches?`],
       why: why(`The ${t} is in the tenths place, so 0.${t} is ${t} tenths: ${t}/10.`, [`0.${t} means ${t} hundredths: ${t}/100.`, `0.${t} means 1 out of ${t}: 1/${t}.`]),
       mistake: `${t}/100`,
     };
@@ -1194,6 +1510,7 @@ function decimals(level) {
         answer: dec,
         choices: shuffle([dec, tenthsWrong, `0.0${h}`]),
         hint: 'Hundredths use two places after the decimal point.',
+        steps: [`${h}/100 means ${h} hundredths.`, 'Hundredths use two places after the decimal point.', `Write a 0, then the point, then ${h}. Which choice matches?`],
         why: why(`${h} hundredths fills two places after the point: ${dec}.`, [
           `Put the point between the digits: ${tenthsWrong}.`,
           `Hundredths start two zeros after the point: 0.0${h}.`,
@@ -1209,6 +1526,7 @@ function decimals(level) {
         summary: `${t}/10 = ?/100`,
         answer: String(t * 10),
         hint: '1 tenth is the same as 10 hundredths.',
+        steps: ['1 tenth is the same as 10 hundredths.', `So ${t} tenths is ${t} groups of 10 hundredths.`, `${t} × 10 = ?`],
         why: why(`1 tenth = 10 hundredths, so ${t} tenths = ${t * 10} hundredths.`, [`Add 90 to the top, like the bottom: ${t + 90}.`, `The top stays the same: ${t}.`]),
         mistake: t,
       };
@@ -1220,6 +1538,7 @@ function decimals(level) {
       answer,
       choices: shuffle([answer, `${h}/10`, `${h}/1000`]),
       hint: 'Two places after the point means hundredths.',
+      steps: [`Count the places after the point in ${dec}: two.`, 'Two places means hundredths, so the bottom is 100.', 'What goes on top? Which choice matches?'],
       why: why(`${dec} has two places after the point, so it's ${h} hundredths: ${h}/100.`, [`${dec} is ${h} tenths: ${h}/10.`, `Add a zero for every digit, plus one: ${h}/1000.`]),
       mistake: `${h}/10`,
     };
@@ -1267,6 +1586,9 @@ function decimals(level) {
     answer,
     choices: SIGNS,
     hint: 'Give both numbers two places after the point (0.5 = 0.50), then compare.',
+    steps: kind === 'plain'
+      ? ['Both numbers have two places after the point.', `Compare the tenths first: ${L[2]} and ${R[2]}. If they're the same, compare the hundredths.`, 'Which sign fits?']
+      : ['Give both numbers two places after the point. 0.5 is the same as 0.50.', `So it's ${two(lv)} and ${two(rv)}.`, `Compare ${lv} hundredths and ${rv} hundredths. Which sign fits?`],
     why: why(right, wrong, grids),
     mistake: kind === 'trap' ? (L === long ? '>' : '<') : kind === 'equal' ? (L === long ? '>' : '<') : { '<': '>', '>': '<' }[answer],
   };
@@ -1298,6 +1620,12 @@ function measurement(level) {
       summary: `${n} ${big[1]} = ? ${small[1]}`,
       answer: String(n * f),
       hint: `1 ${big[0]} = ${fmt(f)} ${small[1]}. How many groups of ${fmt(f)}?`,
+      steps: [
+        `1 ${big[0]} = ${fmt(f)} ${small[1]}.`,
+        `${n} ${big[1]} is ${n} groups of ${fmt(f)}.`,
+        ...(timesTip(n, f) ? [timesTip(n, f)] : []),
+        `${n} × ${fmt(f)} = ?`,
+      ],
       why: why(`1 ${big[0]} = ${fmt(f)} ${small[1]}, so ${n} ${big[1]} = ${n} × ${fmt(f)} = ${fmt(n * f)}.`, [
         `Add them: ${n} + ${fmt(f)} = ${fmt(n + f)}.`,
         `1 ${big[0]} is 10 ${small[1]}, so it's ${n * 10}.`,
@@ -1314,6 +1642,11 @@ function measurement(level) {
       summary: `${n} ${unitWord(big, n)} ${fmt(m)} ${unitWord(small, m)} = ? ${small[1]}`,
       answer: String(n * f + m),
       hint: `Change the ${big[1]} into ${small[1]} first (1 ${big[0]} = ${fmt(f)}), then add the ${fmt(m)}.`,
+      steps: [
+        `1 ${big[0]} = ${fmt(f)} ${small[1]}.`,
+        `Change the ${unitWord(big, n)}: ${n} × ${fmt(f)} = ${fmt(n * f)} ${small[1]}.`,
+        `Don't forget the extra ${fmt(m)}: ${fmt(n * f)} + ${fmt(m)} = ?`,
+      ],
       why: why(`${n} × ${fmt(f)} = ${fmt(n * f)} ${small[1]}, then add the ${fmt(m)}: ${fmt(n * f + m)}.`, [
         `Just add the numbers: ${n} + ${fmt(m)} = ${fmt(n + m)}.`,
         `${n} × ${fmt(f)} = ${fmt(n * f)}, and that's the answer.`,
@@ -1334,6 +1667,11 @@ function measurement(level) {
     answer,
     choices: shuffle([bigText, smallText]),
     hint: `Change ${bigText} into ${small[1]} first. 1 ${big[0]} = ${fmt(f)} ${small[1]}.`,
+    steps: [
+      `Change ${bigText} into ${small[1]}. 1 ${big[0]} = ${fmt(f)} ${small[1]}.`,
+      `${n} × ${fmt(f)} = ${fmt(n * f)} ${small[1]}.`,
+      `Now compare ${fmt(n * f)} ${small[1]} with ${smallText}. Which is ${c.more}?`,
+    ],
     why: why(`${bigText} = ${n} × ${fmt(f)} = ${fmt(n * f)} ${small[1]}. ${fmt(n * f)} ${n * f > s ? '>' : '<'} ${fmt(s)}, so ${answer} is ${c.more}.`, [
       `${fmt(s)} is a bigger number, so it's ${c.more}.`,
       `${cap(big[1])} are bigger units, so ${bigText} is always ${c.more}.`,
@@ -1383,6 +1721,9 @@ function mistakeTopic(topics) {
         answer: buddyRight ? RIGHT : WRONG,
         choices: [RIGHT, WRONG],
         hint: "Solve it yourself first. Then check {buddy}'s answer.",
+        steps: base.steps?.length
+          ? [`Solve it yourself first. ${base.steps[0]}`, ...base.steps.slice(1), "Now check: does {buddy}'s answer match yours?"]
+          : undefined,
         why: base.why,
         whyAsk: "What's the right thinking?",
         alwaysWhy: true,
