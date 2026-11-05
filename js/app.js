@@ -43,11 +43,12 @@ const GOAL_BONUS = 20;
 
 const startOfDay = (t) => new Date(t).setHours(0, 0, 0, 0);
 // Weeks start on Sunday.
-function weekStart() {
+function weekStart(weeksAgo = 0) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  return d.setDate(d.getDate() - d.getDay());
+  return d.setDate(d.getDate() - d.getDay() - 7 * weeksAgo);
 }
+const HISTORY_MAX = 200; // rounds kept, for Recent quests and weekly reports
 const questsThisWeek = (p) => p.history.filter((h) => h.t >= weekStart()).length;
 
 function show(html) {
@@ -457,6 +458,12 @@ function renderParents(childId = state.currentId) {
         ${state.profiles.map((k) => `<button class="tab ${k.id === p.id ? 'selected' : ''}" data-child="${k.id}" role="tab">${k.avatar} ${esc(k.name)}</button>`).join('')}
       </div>
 
+      <div class="panel report-link">
+        <h2>📄 Weekly report</h2>
+        <p class="panel-note">How ${esc(first)}'s week went, with ideas for next week. Easy to print or save as a PDF. This week: <strong>${questsThisWeek(p)}</strong> quest${questsThisWeek(p) === 1 ? '' : 's'} so far.</p>
+        <button class="btn" data-action="report">Open weekly report</button>
+      </div>
+
       <div class="panel">
         <h2>⭐ Focus areas</h2>
         <p class="panel-note">Tick what ${esc(first)} is working on. Focus quests show first on ${esc(first)}'s screen, pay ${FOCUS_BONUS} bonus coins, and come up more often in Mixed Challenge and Fix the Mistake.
@@ -537,6 +544,7 @@ function renderParents(childId = state.currentId) {
 
   on('[data-action="back"]', renderHome);
   on('[data-child]', (el) => renderParents(el.dataset.child));
+  on('[data-action="report"]', () => renderReport(p.id));
   on('[data-focus]', (el) => {
     const id = el.dataset.focus;
     p.focus = p.focus.includes(id) ? p.focus.filter((x) => x !== id) : [...p.focus, id];
@@ -574,6 +582,151 @@ function renderParents(childId = state.currentId) {
   });
 }
 
+/* ---------------------------- Weekly report ---------------------------- */
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const shortDate = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const pctOf = (n, d) => (d ? Math.round((100 * n) / d) : 0);
+
+// Adds up one week of rounds (weeksAgo = 0 is this week).
+function weekSummary(p, weeksAgo) {
+  const from = weekStart(weeksAgo);
+  const to = weekStart(weeksAgo - 1);
+  const rounds = p.history.filter((h) => h.t >= from && h.t < to);
+  const quests = rounds.filter((h) => h.topic !== 'speed');
+  const speedRounds = rounds.filter((h) => h.topic === 'speed');
+  const sum = (list, key) => list.reduce((n, h) => n + (h[key] || 0), 0);
+  const topics = {};
+  for (const h of quests) {
+    // Older rounds don't have per-topic results, so count them under the round's topic.
+    const parts = h.byTopic ?? { [h.topic]: [QUESTIONS_PER_ROUND, h.firstTry] };
+    for (const [id, [asked, first]] of Object.entries(parts)) {
+      topics[id] ??= { asked: 0, first: 0 };
+      topics[id].asked += asked;
+      topics[id].first += first;
+    }
+  }
+  const days = new Set(rounds.map((h) => new Date(h.t).getDay()));
+  const perDay = DAY_NAMES.map((_, d) => rounds.filter((h) => new Date(h.t).getDay() === d).length);
+  const asked = Object.values(topics).reduce((n, t) => n + t.asked, 0);
+  const first = Object.values(topics).reduce((n, t) => n + t.first, 0);
+  const best1 = Math.max(0, ...speedRounds.filter((h) => h.seconds === 60).map((h) => h.speed));
+  return {
+    from, to, rounds, quests, speedRounds, topics, days, perDay, asked, first,
+    whyAsked: sum(quests, 'whyAsked'), whyRight: sum(quests, 'whyRight'),
+    tellAsked: sum(quests, 'tellAsked'), told: sum(quests, 'told'),
+    hinted: sum(quests, 'hinted'), coins: sum(rounds, 'coins'),
+    speedRight: sum(speedRounds, 'speed'), speedWrong: sum(speedRounds, 'wrong'), best1,
+  };
+}
+
+function renderReport(childId, weeksAgo = 0) {
+  applyLook(null);
+  const p = state.profiles.find((k) => k.id === childId) ?? state.profiles[0];
+  const name = esc(p.name);
+  const w = weekSummary(p, weeksAgo);
+  const last = weekSummary(p, weeksAgo + 1);
+  const firstPct = pctOf(w.first, w.asked);
+  const change = (now, before, unit = '') => {
+    if (!before && before !== 0) return '';
+    const d = now - before;
+    return d ? `<small class="delta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}${unit} vs last week</small>` : '<small class="delta">same as last week</small>';
+  };
+  const lastPct = last.asked ? pctOf(last.first, last.asked) : null;
+  const goal = p.weeklyGoal ? ` of ${p.weeklyGoal}` : '';
+
+  const topicRows = Object.entries(w.topics)
+    .map(([id, t]) => ({ id, t, topic: findTopic(id), pct: pctOf(t.first, t.asked) }))
+    .sort((a, b) => b.t.asked - a.t.asked);
+  const rowHtml = topicRows.map(({ t, topic, pct }) => `
+    <div class="report-row">
+      <span class="report-topic">${topic?.emoji ?? ''} ${esc(topic?.name ?? '')}</span>
+      <span class="report-bar"><span style="width:${pct}%" class="${pct >= 80 ? 'good' : pct < 70 ? 'low' : ''}"></span></span>
+      <span class="report-num">${pct}% <small>of ${t.asked}</small></span>
+    </div>`).join('');
+
+  const enough = topicRows.filter((r) => r.t.asked >= 5 && r.topic && !r.topic.extra);
+  const wins = enough.filter((r) => r.pct >= 80).sort((a, b) => b.pct - a.pct).slice(0, 3);
+  const tricky = enough.filter((r) => r.pct < 70).sort((a, b) => a.pct - b.pct).slice(0, 3);
+  const facts = Object.entries(p.speed.missed).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => `${k} = ${factFromKey(k).answer}`);
+
+  // A few ideas for next week, most useful first.
+  const ideas = [];
+  if (!w.rounds.length) ideas.push(`Pick two or three short practice times for next week. Ten minutes on a few days beats one long session.`);
+  else if (w.days.size < 3) ideas.push(`${name} practiced on ${w.days.size} day${w.days.size === 1 ? '' : 's'}. Short quests on more days help facts stick.`);
+  if (tricky[0]) ideas.push(`Do ${/^[AEIOU]/.test(tricky[0].topic.name) ? 'an' : 'a'} ${esc(tricky[0].topic.name)} quest together. Open the 💡 steps and ask “What would you do next?” before each one.`);
+  if (w.whyAsked >= 3 && w.whyRight / w.whyAsked < 0.6) ideas.push(`Explaining was tricky this week. At homework time, ask “How do you know?” and let ${name} talk it through before you help.`);
+  if (w.asked >= 10 && w.hinted / w.asked >= 0.5) ideas.push(`${name} used hints on about half the questions. Before tapping 💡, ask what the first step might be.`);
+  if (facts.length && weeksAgo === 0) ideas.push(`Quick facts to practice in the car or at dinner: ${facts.slice(0, 4).join(', ')}.`);
+  if (w.rounds.length && !tricky.length && firstPct >= 85) ideas.push(`A strong week! Try 🔥 Hard or 🧭 Auto so ${name} keeps being challenged.`);
+  if (w.tellAsked && w.told / w.tellAsked >= 0.5) ideas.push(`Great talking-it-out this week. Keep tapping ⭐ when the steps are clear.`);
+
+  const days = DAY_NAMES.map((d, i) => `<div class="day ${w.perDay[i] ? 'on' : ''}"><b>${d}</b><span>${w.perDay[i] ? '✓'.repeat(Math.min(3, w.perDay[i])) : '–'}</span></div>`).join('');
+
+  show(`
+    <div class="screen parents report">
+      <div class="topbar no-print">
+        <button class="icon-btn" data-action="back" aria-label="Back">←</button>
+        <div class="who"><strong>📄 Weekly report</strong></div>
+        <button class="btn small" data-action="print">🖨️ Print</button>
+      </div>
+      <div class="week-nav no-print">
+        <button class="btn secondary small" data-week="${weeksAgo + 1}">‹ Earlier</button>
+        <span>${weeksAgo === 0 ? 'This week' : weeksAgo === 1 ? 'Last week' : `${weeksAgo} weeks ago`}</span>
+        <button class="btn secondary small" data-week="${weeksAgo - 1}" ${weeksAgo === 0 ? 'disabled' : ''}>Later ›</button>
+      </div>
+
+      <div class="panel">
+        <div class="report-head">
+          <span class="report-avatar">${p.avatar}</span>
+          <div><h2>${name}'s week</h2>
+            <p class="panel-note">Grade ${p.grade} · ${shortDate(w.from)} – ${shortDate(w.to - 1)}</p></div>
+        </div>
+        ${w.rounds.length ? `
+        <div class="tiles">
+          <div class="tile"><strong>${w.rounds.length}${goal}</strong><span>quests${p.weeklyGoal && w.rounds.length >= p.weeklyGoal ? ' 🎯' : ''}</span>${change(w.rounds.length, last.rounds.length)}</div>
+          <div class="tile"><strong>${w.days.size} of 7</strong><span>days practiced</span></div>
+          <div class="tile"><strong>${w.asked ? `${firstPct}%` : '–'}</strong><span>right first try</span>${w.asked && lastPct !== null ? change(firstPct, lastPct, '%') : ''}</div>
+          <div class="tile"><strong>${w.asked}</strong><span>questions</span></div>
+          <div class="tile"><strong>🪙 ${w.coins}</strong><span>coins earned</span></div>
+        </div>
+        <div class="days">${days}</div>` : `<p class="panel-note">No quests this week${weeksAgo === 0 ? ' yet' : ''}.</p>`}
+      </div>
+
+      ${rowHtml ? `<div class="panel"><h2>📚 Topics</h2><p class="panel-note">How often ${name} got it right on the first try, and how many questions.</p>${rowHtml}</div>` : ''}
+
+      ${wins.length || tricky.length ? `
+      <div class="panel two-col">
+        <div><h3>🌟 Going well</h3>${wins.length ? `<ul>${wins.map((r) => `<li>${r.topic.emoji} ${esc(r.topic.name)}: ${r.pct}%</li>`).join('')}</ul>` : '<p class="panel-note">Keep going, wins are on the way!</p>'}</div>
+        <div><h3>🔎 Worth practicing</h3>${tricky.length ? `<ul>${tricky.map((r) => `<li>${r.topic.emoji} ${esc(r.topic.name)}: ${r.pct}%
+          ${p.focus.includes(r.id) ? '<small>(focus area)</small>' : `<button class="link-btn no-print" data-focus-add="${r.id}">⭐ Make it a focus area</button>`}</li>`).join('')}</ul>` : '<p class="panel-note">Nothing under 70% this week.</p>'}</div>
+      </div>` : ''}
+
+      ${w.quests.length || w.speedRounds.length ? `
+      <div class="panel">
+        <h2>🧠 Thinking & speed</h2>
+        <div class="review">
+          ${w.whyAsked ? `<div class="review-row"><span>🧠 Picked the right explanation</span><strong>${w.whyRight} of ${w.whyAsked}</strong></div>` : ''}
+          ${w.tellAsked ? `<div class="review-row"><span>🗣️ Great explaining out loud</span><strong>${w.told} of ${w.tellAsked}</strong></div>` : ''}
+          ${w.asked ? `<div class="review-row"><span>💡 Questions with a hint</span><strong>${w.hinted} of ${w.asked}</strong></div>` : ''}
+          ${w.speedRounds.length ? `<div class="review-row"><span>⚡ Speed Rounds</span><strong>${w.speedRounds.length}${w.best1 ? ` · best ${w.best1} in 1 min` : ''} · ${pctOf(w.speedRight, w.speedRight + w.speedWrong)}% right</strong></div>` : ''}
+        </div>
+        ${facts.length && weeksAgo === 0 ? `<p class="panel-note"><strong>Facts to practice:</strong> ${facts.map(esc).join(' · ')}</p>` : ''}
+      </div>` : ''}
+
+      ${ideas.length ? `<div class="panel"><h2>💬 Ideas for next week</h2><ul class="ideas">${ideas.slice(0, 4).map((i) => `<li>${i}</li>`).join('')}</ul></div>` : ''}
+    </div>`);
+
+  on('[data-action="back"]', () => renderParents(p.id));
+  on('[data-action="print"]', () => window.print());
+  on('[data-week]', (el) => !el.disabled && renderReport(p.id, Number(el.dataset.week)));
+  on('[data-focus-add]', (el) => {
+    p.focus = [...new Set([...p.focus, el.dataset.focusAdd])];
+    save();
+    el.outerHTML = '<small>⭐ Added as a focus area</small>';
+  });
+}
+
 /* ---------------------------- Playing ---------------------------- */
 
 // "How do you know?" comes up on these questions (or the next one answered right on the first try).
@@ -587,7 +740,7 @@ function startRound(topicId) {
   const focus = core.filter((t) => p.focus.includes(t.id));
   session = {
     topic, level: topicLevel(p, topic.id), auto: p.autoLevel, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
-    points: 0, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
+    points: 0, byTopic: {}, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
     pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false, hinted: 0,
   };
@@ -766,6 +919,10 @@ function recordAnswer(q, firstTry) {
   s.asked++;
   if (firstTry) s.firstTry++;
   s.last = Date.now();
+  // Per-topic results for this round, for the weekly report.
+  const t = (session.byTopic[q.topicId] ??= [0, 0]);
+  t[0]++;
+  if (firstTry) t[1]++;
   save();
 }
 
@@ -995,12 +1152,14 @@ function finishRound() {
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
   const earned = session.points;
-  p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told, hinted });
-  p.history.length = Math.min(p.history.length, 60);
+  const entry = { t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told, hinted, byTopic: session.byTopic };
+  p.history.unshift(entry);
+  p.history.length = Math.min(p.history.length, HISTORY_MAX);
   const bonuses = [];
   if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);
   goalBonus(p, bonuses);
-  p.coins += earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  entry.coins = earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  p.coins += entry.coins;
   save();
 
   sounds.win();
@@ -1290,11 +1449,12 @@ function finishSpeed() {
     else if (level > 1 && score / tries < 0.7) newLevel = level - 1;
     p.topicLevels.speed = newLevel;
   }
-  p.history.length = Math.min(p.history.length, 60);
+  p.history.length = Math.min(p.history.length, HISTORY_MAX);
   const bonuses = [];
   if (newBest && oldBest) bonuses.push(['🏅 New best', SPEED_NEW_BEST]);
   goalBonus(p, bonuses);
-  p.coins += score + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  p.history[0].coins = score + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  p.coins += p.history[0].coins;
   save();
 
   sounds.win();

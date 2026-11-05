@@ -31,6 +31,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Weekly goal**: 3–10 quests a week, with a progress bar on the kid's screen and a bonus when it's reached.
   - **Note**: a short message the buddy shows on the quest screen ("Line up the places!").
   - **Recent quests**: the last 10 rounds with scores.
+  - **📄 Weekly report**: one page per week (Sunday to Saturday), with ‹ Earlier / Later › to look back. It shows quests (against the weekly goal), days practiced, first-try % and the change from last week, questions, coins, a day-by-day strip, per-topic bars (Mixed rounds count under each real topic), what's going well, what's worth practicing (with a one-tap "Make it a focus area"), explaining, hints and Speed Round results, plus a few ideas for next week. 🖨️ Print uses a clean print layout, and you can also save it as a PDF from the print dialog.
   - Forgot the PIN? It's stored with the rest of the app's data; clearing this site's data in the browser resets it (and the kids' progress).
 - On-screen number pad (tablet friendly) plus keyboard support
 - Progress is saved in the browser (localStorage)
