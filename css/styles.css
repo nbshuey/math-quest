@@ -734,3 +734,6 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .progress.timer div { transition: width 0.1s linear; }
 .progress.timer div.low { background: var(--bad); }
 .speed-big { font-size: 5rem; font-weight: 800; line-height: 1; margin: 8px 0; }
+
+/* ----- Auto level ----- */
+.lvl-tag { position: absolute; top: 8px; right: 10px; font-size: 1.1rem; }

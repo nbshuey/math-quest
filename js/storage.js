@@ -15,6 +15,8 @@ function normalizeProfile(p) {
     coins: 0,
     best: {},
     level: 2,
+    autoLevel: false, // 🧭 Auto: each topic keeps its own level and it moves with how they do
+    topicLevels: {}, // topic id → level, for Auto
     buddy: 'cat',
     hat: 'none',
     theme: 'sunny',

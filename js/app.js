@@ -25,7 +25,11 @@ const save = () => saveState(state);
 const currentProfile = () => state.profiles.find((p) => p.id === state.currentId);
 const totalStars = (p) => Object.values(p.best).reduce((a, b) => a + b, 0);
 const buddyOf = (p) => BUDDIES.find((b) => b.id === p.buddy) ?? BUDDIES[0];
-const levelOf = (p) => LEVELS.find((l) => l.id === p.level) ?? LEVELS[1];
+const levelById = (id) => LEVELS.find((l) => l.id === id) ?? LEVELS[1];
+// With 🧭 Auto, each topic (and the Speed Round) keeps its own level.
+const topicLevel = (p, topicId) => (p.autoLevel ? p.topicLevels[topicId] ?? p.level : p.level);
+const AUTO_UP = 3; // right on the first try this many times in a row → a level up
+const AUTO_DOWN = 2; // missed the first try this many times in a row → a level down
 const owns = (p, tab, item) => item.price === 0 || p.owned[tab].includes(item.id);
 const starRow = (n, max = 3) =>
   `<span class="stars">${Array.from({ length: max }, (_, i) => `<span class="${i < n ? '' : 'off'}">★</span>`).join('')}</span>`;
@@ -244,14 +248,16 @@ function renderTopics() {
         <div class="topic-emoji">${t.emoji}</div>
         <div class="topic-name">${t.name}</div>
         <div class="topic-desc">${t.desc}</div>
-        ${starRow(p.best[`${t.id}:${p.level}`] || 0)}
+        ${p.autoLevel ? `<span class="lvl-tag" title="${levelById(topicLevel(p, t.id)).name}">${levelById(topicLevel(p, t.id)).emoji}</span>` : ''}
+        ${starRow(p.best[`${t.id}:${topicLevel(p, t.id)}`] || 0)}
       </button>`,
     )
     .join('');
   const levels = LEVELS.map(
-    (l) => `<button class="level-opt ${l.id === p.level ? 'selected' : ''}" data-level="${l.id}">
+    (l) => `<button class="level-opt ${!p.autoLevel && l.id === p.level ? 'selected' : ''}" data-level="${l.id}">
       ${l.emoji} ${l.name}<small>🪙 ×${l.id} coins</small></button>`,
-  ).join('');
+  ).join('') + `<button class="level-opt ${p.autoLevel ? 'selected' : ''}" data-level="auto">
+      🧭 Auto<small>Moves with you</small></button>`;
   const done = questsThisWeek(p);
   const goal = p.weeklyGoal
     ? `<div class="goal"><span>🎯 This week: <strong>${Math.min(done, p.weeklyGoal)} of ${p.weeklyGoal}</strong> quests${done >= p.weeklyGoal ? ' ✅' : ''}</span>
@@ -277,10 +283,15 @@ function renderTopics() {
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="speed"]', renderSpeedIntro);
   on('[data-level]', (el) => {
-    p.level = Number(el.dataset.level);
+    if (el.dataset.level === 'auto') p.autoLevel = true;
+    else {
+      p.autoLevel = false;
+      p.level = Number(el.dataset.level);
+    }
     save();
     sounds.tap();
     renderTopics();
+    if (p.autoLevel) say('Auto it is! I\'ll make it harder when you\'re on a roll, and easier when it gets tricky. 🧭', 'happy');
   });
   on('[data-topic]', (el) => startRound(el.dataset.topic));
 }
@@ -402,9 +413,10 @@ function renderParents(childId = state.currentId) {
       if (s?.asked >= 8 && pct < 70) flags.push('<span class="flag">🔎 Tricky</span>');
       if (s?.whyAsked >= 3 && s.whyRight / s.whyAsked < 0.6) flags.push('<span class="flag">🧠 Explaining is tricky</span>');
       if (s?.asked >= 8 && s.hinted / s.asked >= 0.5) flags.push('<span class="flag">💡 Leans on hints</span>');
+      const lvl = p.autoLevel ? `🧭 ${levelById(topicLevel(p, t.id)).emoji} ${levelById(topicLevel(p, t.id)).name} · ` : '';
       const detail = s?.asked
-        ? `${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''}${s.tellAsked ? ` · 🗣️ ${s.told} of ${s.tellAsked} out loud` : ''}${s.hinted ? ` · 💡 hints on ${s.hinted} question${s.hinted > 1 ? 's' : ''}` : ''} · ${ago(s.last)}`
-        : 'Not played yet';
+        ? `${lvl}${pct}% right the first time (${s.firstTry} of ${s.asked})${s.whyAsked ? ` · 🧠 ${s.whyRight} of ${s.whyAsked} explained` : ''}${s.tellAsked ? ` · 🗣️ ${s.told} of ${s.tellAsked} out loud` : ''}${s.hinted ? ` · 💡 hints on ${s.hinted} question${s.hinted > 1 ? 's' : ''}` : ''} · ${ago(s.last)}`
+        : `${lvl}Not played yet`;
       return `
         <button class="toggle-opt topic-opt ${p.focus.includes(t.id) ? 'selected' : ''}" data-focus="${t.id}">
           <span class="check"></span><span class="topic-opt-emoji">${t.emoji}</span>
@@ -469,6 +481,15 @@ function renderParents(childId = state.currentId) {
             <li>Tap <strong>Great explaining</strong> for clear steps, even short ones. Effort counts!</li>
           </ul>
         </div>
+      </div>
+
+      <div class="panel">
+        <h2>🧭 Difficulty</h2>
+        <div class="toggle-list">
+          <button class="toggle-opt ${p.autoLevel ? 'selected' : ''}" data-toggle="autoLevel"><span class="check"></span>
+            <span>🧭 Auto level <small class="block">Each topic keeps its own level. It goes up after ${AUTO_UP} first-try answers in a row and down after ${AUTO_DOWN} misses in a row, so ${esc(first)} stays challenged without getting stuck. ${esc(first)} can also pick this on the quest screen.</small></span></button>
+        </div>
+        ${p.autoLevel ? '' : `<p class="panel-note">Right now ${esc(first)} plays everything at ${levelById(p.level).emoji} ${levelById(p.level).name}.</p>`}
       </div>
 
       <div class="panel">
@@ -565,7 +586,8 @@ function startRound(topicId) {
   const core = coreTopics(p.grade);
   const focus = core.filter((t) => p.focus.includes(t.id));
   session = {
-    topic, level: p.level, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    topic, level: topicLevel(p, topic.id), auto: p.autoLevel, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    points: 0, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
     pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false, hinted: 0,
   };
@@ -580,12 +602,31 @@ function loadQuestion() {
   while (session.seen.has(q.summary ?? q.prompt) && tries++ < 25);
   session.seen.add(q.summary ?? q.prompt);
   q.topicId ??= session.topic.id;
+  q.level = session.level;
+  session.levelCounts[q.level]++;
   const name = buddyName(currentProfile());
   for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
   q.steps = (q.steps?.length ? q.steps : [q.hint]).map((step) => step.replaceAll('{buddy}', name));
   if (WHY_AT.includes(session.index)) session.whyDue = true;
   Object.assign(session, { current: q, attempts: 0, locked: false, input: '', stepsShown: 0 });
   renderQuestion();
+}
+
+// 🧭 Auto: move up after a run of first-try answers, down after a run of misses.
+function trackLevel(firstTry) {
+  const s = session;
+  if (firstTry) [s.upRun, s.downRun] = [s.upRun + 1, 0];
+  else [s.upRun, s.downRun] = [0, s.downRun + 1];
+  if (!s.auto) return;
+  if (s.upRun >= AUTO_UP && s.level < 3) {
+    s.level++;
+    s.levelNote = `Level up! ⬆️ Let's try ${levelById(s.level).emoji} ${levelById(s.level).name}.`;
+  } else if (s.downRun >= AUTO_DOWN && s.level > 1) {
+    s.level--;
+    s.levelNote = `Let's warm up with some ${levelById(s.level).emoji} ${levelById(s.level).name} ones. ⬇️`;
+  } else return;
+  s.upRun = 0;
+  s.downRun = 0;
 }
 
 function nextQuestion() {
@@ -617,9 +658,11 @@ function renderQuestion() {
         <button data-key="0">0</button>
         <button data-key="enter" class="go" aria-label="Check answer">✓</button>
       </div>`;
-  const greeting = q.claim !== undefined
+  const note = session.levelNote;
+  session.levelNote = '';
+  const greeting = note || (q.claim !== undefined
     ? 'I tried this one. Did I get it right?'
-    : session.streak >= 3 ? `${session.streak} in a row! 🔥` : pick(GREETINGS);
+    : session.streak >= 3 ? `${session.streak} in a row! 🔥` : pick(GREETINGS));
   const claim = q.claim !== undefined
     ? `<div class="claim">${buddyOf(p).emoji} <span>${esc(buddyName(p))} says: <strong>${esc(q.claim)}</strong></span></div>
        <div class="claim-ask">Is ${esc(buddyName(p))} right?</div>`
@@ -635,7 +678,7 @@ function renderQuestion() {
       ${buddyRow(p, greeting)}
       <div class="question" id="question">
         ${sayButton('question', 'Read the question aloud')}
-        <div class="q-count">${session.topic.emoji} Question ${session.index + 1} of ${QUESTIONS_PER_ROUND} · ${levelOf(p).emoji} ${levelOf(p).name}</div>
+        <div class="q-count">${session.topic.emoji} Question ${session.index + 1} of ${QUESTIONS_PER_ROUND} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
         <div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>
         ${q.visual ? `<div class="visual">${q.visual}</div>` : ''}
         ${claim}
@@ -748,8 +791,10 @@ function submit(value, choiceEl) {
 
   if (correct) {
     session.locked = true;
+    trackLevel(session.attempts === 0);
     if (session.attempts === 0) {
       session.firstTry++;
+      session.points += q.level;
       session.streak++;
       session.bestStreak = Math.max(session.bestStreak, session.streak);
     }
@@ -798,6 +843,7 @@ function submit(value, choiceEl) {
   const shown = q.choices ? q.answer : Number(q.answer).toLocaleString('en-US');
   session.missed.push({ question: q.summary ?? q.prompt, answer: shown });
   recordAnswer(q, false);
+  trackLevel(false);
   setFeedback('reveal', `The answer is ${shown}`);
   app.querySelector('#hintBtn').classList.add('hidden');
   say("That's a tricky one. We'll get the next one!", 'sad');
@@ -843,6 +889,7 @@ function showWhy(q) {
     });
     if (chosen.right) {
       session.whyRight++;
+      session.points += q.level;
       sounds.correct();
       confetti(40);
       say('Great thinking! 🧠 Bonus coins!', 'happy');
@@ -913,6 +960,7 @@ function showTell(q) {
       recordTell(q, great);
       if (great) {
         session.told++;
+        session.points += q.level;
         sounds.win();
         confetti(60);
       } else sounds.tap();
@@ -937,12 +985,16 @@ function goalBonus(p, bonuses) {
 
 function finishRound() {
   const p = currentProfile();
-  const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told, hinted } = session;
+  const { topic, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told, hinted, auto, levelCounts } = session;
+  // The level most questions were at (the higher one on a tie) gets the stars.
+  const level = [3, 2, 1].reduce((best, l) => (levelCounts[l] > levelCounts[best] ? l : best), 3);
+  const startLevel = topicLevel(p, topic.id);
+  if (auto) p.topicLevels[topic.id] = session.level;
   const stars = firstTry >= 9 ? 3 : firstTry >= 7 ? 2 : firstTry >= 5 ? 1 : 0;
   const key = `${topic.id}:${level}`;
   const newBest = stars > (p.best[key] || 0);
   if (newBest) p.best[key] = stars;
-  const earned = (firstTry + whyRight + told) * level;
+  const earned = session.points;
   p.history.unshift({ t: Date.now(), topic: topic.id, level, firstTry, whyAsked, whyRight, tellAsked, told, hinted });
   p.history.length = Math.min(p.history.length, 60);
   const bonuses = [];
@@ -954,10 +1006,13 @@ function finishRound() {
   sounds.win();
   if (stars > 0) confetti(120);
   const message = ["Keep practicing, you're getting stronger!", 'Good job!', 'Great work!', 'PERFECT QUEST! 🏆'][stars];
-  const nextLevel = stars === 3 && level < 3 ? LEVELS[level] : null;
+  const nextLevel = !auto && stars === 3 && level < 3 ? LEVELS[level] : null;
+  const moved = auto && session.level !== startLevel;
   const cheapest = [...BUDDIES, ...HATS, ...THEMES].filter((i) => i.price > p.coins).sort((a, b) => a.price - b.price)[0];
   const buddyLine = nextLevel
     ? `Wow! Ready to try ${nextLevel.emoji} ${nextLevel.name}?`
+    : moved && session.level > startLevel
+      ? `You leveled up to ${levelById(session.level).emoji} ${levelById(session.level).name}! 🧭`
     : cheapest
       ? `${cheapest.price - p.coins} more coins to unlock ${cheapest.name}!`
       : 'You can shop for something new!';
@@ -973,6 +1028,7 @@ function finishRound() {
         ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
         ${tellAsked ? `<p class="result-line">🗣️ Explained out loud: <strong>${told} of ${tellAsked}</strong> great</p>` : ''}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
+        ${auto ? `<p class="result-line">🧭 Level: ${moved ? `${levelById(startLevel).emoji} ${levelById(startLevel).name} → ` : ''}<strong>${levelById(session.level).emoji} ${levelById(session.level).name}</strong>${moved ? '' : ' (staying here)'}</p>` : ''}
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
         ${
           missed.length
@@ -1008,7 +1064,8 @@ function finishRound() {
 // Facts the kid missed before come up more often, and the Grown-ups page lists them.
 const SPEED_TIMES = [60, 120];
 const SPEED_NEW_BEST = 5; // bonus coins for beating your best
-const speedKeyOf = (p, seconds) => `${p.grade}:${p.level}:${seconds}`;
+const SPEED_UP_PACE = 15; // right answers a minute (at 90%+ right) to level up in Auto
+const speedKeyOf = (p, seconds) => `${p.grade}:${topicLevel(p, 'speed')}:${seconds}`;
 const speedBest = (p, seconds) => p.speed.best[speedKeyOf(p, seconds)] ?? 0;
 const minutes = (seconds) => `${seconds / 60} min`;
 
@@ -1017,6 +1074,7 @@ function speedCard(p) {
   const best = speedBest(p, 60);
   return `
     <button class="topic-card speed-card" data-action="speed">
+      ${p.autoLevel ? `<span class="lvl-tag">${levelById(topicLevel(p, 'speed')).emoji}</span>` : ''}
       <div class="topic-emoji">⚡</div>
       <div class="topic-name">Speed Round</div>
       <div class="topic-desc">${p.grade === 2 ? 'Quick add & subtract facts' : 'Quick times & division facts'}</div>
@@ -1039,7 +1097,7 @@ function nextFact() {
   let tries = 0;
   // About 1 in 12 facts per practice fact, up to 1 in 4.
   const chance = Math.min(0.25, 0.08 * practice.length);
-  do f = Math.random() < chance ? factFromKey(pick(practice)) : speedFact(p.grade, p.level);
+  do f = Math.random() < chance ? factFromKey(pick(practice)) : speedFact(p.grade, topicLevel(p, 'speed'));
   while (speed.recent.includes(f.key) && tries++ < 20);
   speed.recent = [f.key, ...speed.recent].slice(0, 4);
   return f;
@@ -1058,7 +1116,7 @@ function renderSpeedIntro() {
       ${playerBar(p)}
       <div class="panel speed-intro">
         ${buddyRow(p, 'Ready, set, go! ⚡')}
-        <h2>⚡ Speed Round · ${levelOf(p).emoji} ${levelOf(p).name}</h2>
+        <h2>⚡ Speed Round · ${p.autoLevel ? '🧭 ' : ''}${levelById(topicLevel(p, 'speed')).emoji} ${levelById(topicLevel(p, 'speed')).name}</h2>
         <p class="panel-note">${intro} ${sayButton('intro', 'Read aloud')}</p>
         <p class="panel-note">A wrong answer just shows the right one and keeps going. Facts you miss come back for practice.</p>
         <div class="levels" role="group" aria-label="How long">${times}</div>
@@ -1221,7 +1279,17 @@ function finishSpeed() {
     if (--p.speed.missed[k] <= 0) delete p.speed.missed[k];
   }
   for (const f of s.missed) p.speed.missed[f.key] = (p.speed.missed[f.key] ?? 0) + 1;
-  p.history.unshift({ t: Date.now(), topic: 'speed', level: p.level, speed: score, seconds, wrong: s.missed.length });
+  const level = topicLevel(p, 'speed');
+  p.history.unshift({ t: Date.now(), topic: 'speed', level, speed: score, seconds, wrong: s.missed.length });
+  // 🧭 Auto: the next Speed Round gets harder after a fast, accurate one, easier after a bumpy one.
+  const tries = score + s.missed.length;
+  const perMinute = score / (seconds / 60);
+  let newLevel = level;
+  if (p.autoLevel && tries >= 5) {
+    if (level < 3 && score / tries >= 0.9 && perMinute >= SPEED_UP_PACE) newLevel = level + 1;
+    else if (level > 1 && score / tries < 0.7) newLevel = level - 1;
+    p.topicLevels.speed = newLevel;
+  }
   p.history.length = Math.min(p.history.length, 60);
   const bonuses = [];
   if (newBest && oldBest) bonuses.push(['🏅 New best', SPEED_NEW_BEST]);
@@ -1241,7 +1309,8 @@ function finishSpeed() {
         ${buddyRow(p, buddyLine)}
         <h2>⏰ Time's up! ${message}</h2>
         <div class="speed-big">${score}</div>
-        <p class="result-line">right answers in ${minutes(seconds)} · ${levelOf(p).emoji} ${levelOf(p).name}</p>
+        <p class="result-line">right answers in ${minutes(seconds)} · ${levelById(level).emoji} ${levelById(level).name}</p>
+        ${newLevel !== level ? `<p class="result-line">🧭 Next time: <strong>${levelById(newLevel).emoji} ${levelById(newLevel).name}</strong>${newLevel > level ? ' ⬆️ You were fast!' : ''}</p>` : ''}
         <p class="result-line">🪙 +${score} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
         ${

@@ -11,6 +11,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Mixed Challenge** for each grade
 - **⚡ Speed Round**: answer as many quick facts as you can in 1 or 2 minutes (grade 2: add & subtract within 20, plus tens on Hard; grade 4: times tables, plus division facts on Hard). Answers check by themselves, a miss shows the right answer and keeps going, and missed facts come back more often until they're right. 1 coin per right answer, +5 for a new best, with bests kept per level and time.
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
+- **🧭 Auto level**: each topic (and the Speed Round) keeps its own level. During a round it goes up after 3 first-try answers in a row and down after 2 misses in a row, with the buddy announcing the change. Coins and stars follow the level each question was at. The Speed Round levels up after a fast round (15+ a minute, 90% right) and down when under 70% are right. Kids pick it on the quest screen; grown-ups can switch it on the Grown-ups page and see each topic's current level.
 - **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button.
 - **Kid-friendly feedback**: the next hint step after the first miss, the answer shown after the second, and a review list at the end
 - **Reasoning practice**:
@@ -70,4 +71,3 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 - Angles and line plots (grade 4)
 - Buddies that grow or evolve as kids earn stars
 - Picture steps in hints (draw the area model or number line as you go)
-- Adaptive difficulty based on recent answers
