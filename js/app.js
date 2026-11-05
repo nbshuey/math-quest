@@ -1,4 +1,4 @@
-import { TOPICS, GRADES, LEVELS } from './problems.js';
+import { TOPICS, GRADES, LEVELS, speedFact } from './problems.js';
 import { BUDDIES, HATS, THEMES, CATALOG } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
@@ -16,6 +16,7 @@ const app = document.getElementById('app');
 const decor = document.getElementById('decor');
 let state = loadState();
 let session = null; // the round being played
+let speed = null; // the Speed Round being played
 sounds.enabled = state.sound;
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -267,13 +268,14 @@ function renderTopics() {
       </div>
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
       ${goal}
-      <div class="topics">${cards}</div>
+      <div class="topics">${speedCard(p)}${cards}</div>
     </div>`);
 
   bindSound();
   bindBubble();
   on('[data-action="back"]', renderHome);
   on('[data-action="shop"]', () => renderShop());
+  on('[data-action="speed"]', renderSpeedIntro);
   on('[data-level]', (el) => {
     p.level = Number(el.dataset.level);
     save();
@@ -415,9 +417,23 @@ function renderParents(childId = state.currentId) {
     const t = findTopic(h.topic);
     const lvl = LEVELS.find((l) => l.id === h.level);
     const date = new Date(h.t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (h.topic === 'speed') {
+      return `<div class="review-row"><span>${date} · ⚡ Speed Round · ${lvl?.emoji ?? ''}</span>
+        <strong>${h.speed} in ${minutes(h.seconds)}${h.wrong ? ` · ✗ ${h.wrong}` : ''}</strong></div>`;
+    }
     return `<div class="review-row"><span>${date} · ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
       <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}${h.hinted ? ` · 💡 ${h.hinted}` : ''}</strong></div>`;
   }).join('');
+
+  const speedBests = Object.entries(p.speed.best)
+    .filter(([k]) => k.startsWith(`${p.grade}:`))
+    .map(([k, n]) => {
+      const [, level, seconds] = k.split(':').map(Number);
+      const lvl = LEVELS.find((l) => l.id === level);
+      return `<div class="review-row"><span>🏅 Best · ${lvl?.emoji ?? ''} ${lvl?.name ?? ''} · ${minutes(seconds)}</span><strong>${n}</strong></div>`;
+    })
+    .join('');
+  const tricky = Object.entries(p.speed.missed).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
   show(`
     <div class="screen parents">
@@ -453,6 +469,17 @@ function renderParents(childId = state.currentId) {
             <li>Tap <strong>Great explaining</strong> for clear steps, even short ones. Effort counts!</li>
           </ul>
         </div>
+      </div>
+
+      <div class="panel">
+        <h2>⚡ Speed Round</h2>
+        <div class="toggle-list">
+          <button class="toggle-opt ${p.speedOn ? 'selected' : ''}" data-toggle="speedOn"><span class="check"></span>
+            <span>Show the Speed Round <small class="block">A timed round of quick ${p.grade === 2 ? 'add and subtract' : 'times and division'} facts. Turn it off if the clock is stressful.</small></span></button>
+        </div>
+        ${speedBests ? `<div class="review">${speedBests}</div>` : '<p class="panel-note">No Speed Rounds yet.</p>'}
+        ${tricky.length ? `<p class="panel-note"><strong>Facts to practice:</strong> ${tricky.map(([k, n]) => `${esc(k)} = ${factFromKey(k).answer}${n > 1 ? ` (missed ${n}×)` : ''}`).join(' · ')}</p>
+          <p class="panel-note">These come up more often in the Speed Round until ${esc(first)} gets them right.</p>` : ''}
       </div>
 
       <div class="panel">
@@ -900,6 +927,14 @@ function showTell(q) {
 
 /* ---------------------------- Results ---------------------------- */
 
+// Pays the weekly goal bonus once, the first time the goal is reached each week.
+function goalBonus(p, bonuses) {
+  if (p.weeklyGoal && p.goalWeek !== weekStart() && questsThisWeek(p) >= p.weeklyGoal) {
+    p.goalWeek = weekStart();
+    bonuses.push(['🎯 Weekly goal reached', GOAL_BONUS]);
+  }
+}
+
 function finishRound() {
   const p = currentProfile();
   const { topic, level, firstTry, bestStreak, missed, whyAsked, whyRight, tellAsked, told, hinted } = session;
@@ -912,10 +947,7 @@ function finishRound() {
   p.history.length = Math.min(p.history.length, 60);
   const bonuses = [];
   if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);
-  if (p.weeklyGoal && p.goalWeek !== weekStart() && questsThisWeek(p) >= p.weeklyGoal) {
-    p.goalWeek = weekStart();
-    bonuses.push(['🎯 Weekly goal reached', GOAL_BONUS]);
-  }
+  goalBonus(p, bonuses);
   p.coins += earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
   save();
 
@@ -970,9 +1002,279 @@ function finishRound() {
   });
 }
 
+/* ---------------------------- Speed Round ---------------------------- */
+
+// A timed round of quick facts: as many as you can before the time runs out.
+// Facts the kid missed before come up more often, and the Grown-ups page lists them.
+const SPEED_TIMES = [60, 120];
+const SPEED_NEW_BEST = 5; // bonus coins for beating your best
+const speedKeyOf = (p, seconds) => `${p.grade}:${p.level}:${seconds}`;
+const speedBest = (p, seconds) => p.speed.best[speedKeyOf(p, seconds)] ?? 0;
+const minutes = (seconds) => `${seconds / 60} min`;
+
+function speedCard(p) {
+  if (!p.speedOn) return '';
+  const best = speedBest(p, 60);
+  return `
+    <button class="topic-card speed-card" data-action="speed">
+      <div class="topic-emoji">⚡</div>
+      <div class="topic-name">Speed Round</div>
+      <div class="topic-desc">${p.grade === 2 ? 'Quick add & subtract facts' : 'Quick times & division facts'}</div>
+      <div class="speed-best">${best ? `🏅 Best: ${best} in 1 min` : 'Beat the clock!'}</div>
+    </button>`;
+}
+
+// Turn a saved fact ("7 × 8") back into a question, in either order for + and ×.
+function factFromKey(key) {
+  let [a, op, b] = key.split(' ');
+  if ((op === '+' || op === '×') && Math.random() < 0.5) [a, b] = [b, a];
+  const [x, y] = [Number(a), Number(b)];
+  return { text: `${x} ${op} ${y}`, key, answer: String({ '+': x + y, '−': x - y, '×': x * y, '÷': x / y }[op]) };
+}
+
+function nextFact() {
+  const p = currentProfile();
+  const practice = Object.keys(p.speed.missed);
+  let f;
+  let tries = 0;
+  // About 1 in 12 facts per practice fact, up to 1 in 4.
+  const chance = Math.min(0.25, 0.08 * practice.length);
+  do f = Math.random() < chance ? factFromKey(pick(practice)) : speedFact(p.grade, p.level);
+  while (speed.recent.includes(f.key) && tries++ < 20);
+  speed.recent = [f.key, ...speed.recent].slice(0, 4);
+  return f;
+}
+
+function renderSpeedIntro() {
+  const p = currentProfile();
+  applyLook(p);
+  const times = SPEED_TIMES.map((sec) => {
+    const best = speedBest(p, sec);
+    return `<button class="level-opt" data-seconds="${sec}">⏱️ ${minutes(sec)}<small>${best ? `🏅 Best: ${best}` : 'No best yet'}</small></button>`;
+  }).join('');
+  const intro = `Answer as many as you can before time runs out! Type the answer. It checks by itself.`;
+  show(`
+    <div class="screen">
+      ${playerBar(p)}
+      <div class="panel speed-intro">
+        ${buddyRow(p, 'Ready, set, go! ⚡')}
+        <h2>⚡ Speed Round · ${levelOf(p).emoji} ${levelOf(p).name}</h2>
+        <p class="panel-note">${intro} ${sayButton('intro', 'Read aloud')}</p>
+        <p class="panel-note">A wrong answer just shows the right one and keeps going. Facts you miss come back for practice.</p>
+        <div class="levels" role="group" aria-label="How long">${times}</div>
+        <p class="panel-note">🪙 1 coin for every right answer, plus ${SPEED_NEW_BEST} for a new best.</p>
+      </div>
+    </div>`);
+  bindSound();
+  bindBubble();
+  on('[data-say="intro"]', () => speak(intro));
+  on('[data-action="back"]', renderTopics);
+  on('[data-seconds]', (el) => startSpeed(Number(el.dataset.seconds)));
+}
+
+function startSpeed(seconds) {
+  const p = currentProfile();
+  speed = { seconds, score: 0, streak: 0, bestStreak: 0, missed: [], right: [], recent: [], input: '', running: false, locked: false, timer: null };
+  const s = speed;
+  show(`<div class="screen speed-count"><div class="countdown" id="count">3</div></div>`);
+  sounds.tap();
+  let n = 3;
+  const tick = setInterval(() => {
+    if (speed !== s) return clearInterval(tick);
+    n--;
+    if (n > 0) {
+      const el = app.querySelector('#count');
+      el.textContent = n;
+      el.style.animation = 'none';
+      void el.offsetWidth; // restart the pop
+      el.style.animation = '';
+      sounds.tap();
+    } else {
+      clearInterval(tick);
+      playSpeed(p);
+    }
+  }, 700);
+}
+
+function playSpeed(p) {
+  const s = speed;
+  s.current = nextFact();
+  show(`
+    <div class="screen speed-play">
+      <div class="topbar">
+        <button class="icon-btn" data-action="quit" aria-label="Quit">✕</button>
+        <div class="progress timer"><div id="timeBar" style="width:100%"></div></div>
+        <div class="streak" id="timeLeft">${s.seconds}</div>
+      </div>
+      <div class="question speed-q" id="question">
+        <div class="speed-score">✅ <strong id="score">0</strong></div>
+        <div class="prompt speed-fact" id="fact">${esc(s.current.text)} = ?</div>
+        <div class="answer-display" id="answer">&nbsp;</div>
+        <div class="feedback" id="feedback"></div>
+      </div>
+      <div class="numpad">
+        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button data-key="${n}">${n}</button>`).join('')}
+        <button data-key="back" aria-label="Delete">⌫</button>
+        <button data-key="0">0</button>
+        <button data-key="enter" class="go" aria-label="Check answer">✓</button>
+      </div>
+    </div>`);
+  on('[data-key]', (el) => speedKey(el.dataset.key));
+  on('[data-action="quit"]', () => {
+    if (!confirm('Stop the Speed Round? This round won’t count.')) return;
+    stopSpeed();
+    renderTopics();
+  });
+  s.running = true;
+  s.end = Date.now() + s.seconds * 1000;
+  s.timer = setInterval(() => {
+    const left = Math.max(0, s.end - Date.now());
+    const bar = app.querySelector('#timeBar');
+    if (!bar || speed !== s) return clearInterval(s.timer);
+    bar.style.width = `${(left / (s.seconds * 1000)) * 100}%`;
+    bar.classList.toggle('low', left < 10000);
+    app.querySelector('#timeLeft').textContent = Math.ceil(left / 1000);
+    if (!left) finishSpeed();
+  }, 100);
+}
+
+function stopSpeed() {
+  if (!speed) return;
+  clearInterval(speed.timer);
+  speed.running = false;
+}
+
+function speedKey(key) {
+  const s = speed;
+  if (!s?.running || s.locked) return;
+  const answer = s.current.answer;
+  if (key === 'enter') {
+    if (s.input) checkSpeed();
+    return;
+  }
+  if (key === 'back') s.input = s.input.slice(0, -1);
+  else if (s.input.length < 4) s.input = (s.input + key).replace(/^0+(?=\d)/, '');
+  app.querySelector('#answer').textContent = s.input || ' ';
+  // Check by itself once there are as many digits as the answer.
+  if (s.input.length >= answer.length) checkSpeed();
+}
+
+function checkSpeed() {
+  const s = speed;
+  const f = s.current;
+  const fb = app.querySelector('#feedback');
+  if (s.input === f.answer) {
+    s.score++;
+    s.streak++;
+    s.bestStreak = Math.max(s.bestStreak, s.streak);
+    s.right.push(f.key);
+    sounds.tap();
+    app.querySelector('#score').textContent = s.score;
+    fb.className = 'feedback good';
+    fb.textContent = s.streak >= 5 ? `🔥 ${s.streak} in a row!` : '✓';
+    showFact();
+    return;
+  }
+  s.streak = 0;
+  s.missed.push(f);
+  s.locked = true;
+  sounds.wrong();
+  fb.className = 'feedback reveal';
+  fb.textContent = '✗ Remember this one!';
+  const el = app.querySelector('#fact');
+  el.textContent = `${f.text} = ${f.answer}`;
+  el.classList.add('missed');
+  setTimeout(() => {
+    if (speed !== s || !s.running) return;
+    s.locked = false;
+    fb.textContent = '';
+    showFact();
+  }, 1400);
+}
+
+function showFact() {
+  const s = speed;
+  s.current = nextFact();
+  s.input = '';
+  const el = app.querySelector('#fact');
+  el.textContent = `${s.current.text} = ?`;
+  el.classList.remove('pop', 'missed');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('pop');
+  app.querySelector('#answer').textContent = ' ';
+}
+
+function finishSpeed() {
+  const p = currentProfile();
+  const s = speed;
+  stopSpeed();
+  const { seconds, score, bestStreak } = s;
+  const key = speedKeyOf(p, seconds);
+  const oldBest = p.speed.best[key] ?? 0;
+  const newBest = score > oldBest;
+  if (newBest) p.speed.best[key] = score;
+
+  // Practice list: right answers count down, then misses count up
+  // (so a fact missed in this round always stays on the list).
+  for (const k of s.right) {
+    if (!p.speed.missed[k]) continue;
+    if (--p.speed.missed[k] <= 0) delete p.speed.missed[k];
+  }
+  for (const f of s.missed) p.speed.missed[f.key] = (p.speed.missed[f.key] ?? 0) + 1;
+  p.history.unshift({ t: Date.now(), topic: 'speed', level: p.level, speed: score, seconds, wrong: s.missed.length });
+  p.history.length = Math.min(p.history.length, 60);
+  const bonuses = [];
+  if (newBest && oldBest) bonuses.push(['🏅 New best', SPEED_NEW_BEST]);
+  goalBonus(p, bonuses);
+  p.coins += score + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  save();
+
+  sounds.win();
+  if (newBest) confetti(120);
+  const toPractice = [...new Map(s.missed.map((f) => [f.key, f])).values()];
+  const message = newBest ? (oldBest ? 'NEW BEST! 🏅' : 'Your first score! 🏅') : score >= oldBest - 2 ? 'So close to your best!' : 'Nice work!';
+  const buddyLine = newBest ? `${score}! You beat ${oldBest || 'the clock'}!` : `Your best is ${oldBest}. Let's try again!`;
+
+  show(`
+    <div class="screen">
+      <div class="panel results">
+        ${buddyRow(p, buddyLine)}
+        <h2>⏰ Time's up! ${message}</h2>
+        <div class="speed-big">${score}</div>
+        <p class="result-line">right answers in ${minutes(seconds)} · ${levelOf(p).emoji} ${levelOf(p).name}</p>
+        <p class="result-line">🪙 +${score} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
+        ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${
+          toPractice.length
+            ? `<div class="review"><h3>Facts to practice</h3>
+                ${toPractice.map((f) => `<div class="review-row"><span>${esc(f.text)}</span><strong>${esc(f.answer)}</strong></div>`).join('')}
+              </div>`
+            : ''
+        }
+        <div class="panel-actions">
+          <button class="btn secondary" data-action="topics">Pick another</button>
+          <button class="btn" data-action="again">Go again ⚡</button>
+        </div>
+      </div>
+    </div>`);
+
+  bindBubble();
+  say(buddyLine, 'happy');
+  if (p.autoRead) speak(`Time's up! ${score} right answers. ${buddyLine}`);
+  on('[data-action="topics"]', renderTopics);
+  on('[data-action="again"]', () => startSpeed(seconds));
+}
+
 /* ---------------------------- Keyboard ---------------------------- */
 
 document.addEventListener('keydown', (e) => {
+  if (speed?.running && app.querySelector('.speed-play')) {
+    if (e.key === 'Enter') e.preventDefault();
+    if (/^[0-9]$/.test(e.key)) speedKey(e.key);
+    else if (e.key === 'Backspace') speedKey('back');
+    else if (e.key === 'Enter') speedKey('enter');
+    return;
+  }
   if (!session?.current || !app.querySelector('.play')) return;
   // Stop Enter from also "clicking" whichever button has focus.
   if (e.key === 'Enter') e.preventDefault();

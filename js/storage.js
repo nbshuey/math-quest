@@ -27,6 +27,9 @@ function normalizeProfile(p) {
     weeklyGoal: 0, // quests per week (0 = off)
     goalWeek: 0, // start of the week the goal bonus was last paid
     message: '', // a note the buddy shows on the quest screen
+    speedOn: true, // show the timed Speed Round
+    // Speed Round: best scores by "grade:level:seconds", and misses per fact.
+    speed: { best: {}, missed: {} },
     // Progress: per-topic totals, and the most recent rounds.
     stats: {},
     history: [],

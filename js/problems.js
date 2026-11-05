@@ -1778,3 +1778,35 @@ export const TOPICS = {
 };
 
 export const GRADES = Object.keys(TOPICS).map(Number);
+
+/* ---------------------------- Speed Round ---------------------------- */
+
+// Quick facts for the timed Speed Round. `key` names the fact the same way
+// whichever order it's shown in (3 + 5 and 5 + 3 are one fact to practice).
+const fact = (a, op, b) => {
+  const [x, y] = op === '+' || op === '×' ? [Math.min(a, b), Math.max(a, b)] : [a, b];
+  const answer = { '+': a + b, '−': a - b, '×': a * b, '÷': a / b }[op];
+  return { text: `${a} ${op} ${b}`, answer: String(answer), key: `${x} ${op} ${y}` };
+};
+
+export function speedFact(grade, level) {
+  if (grade === 2) {
+    if (level === 1) {
+      const a = rand(1, 9);
+      return fact(a, '+', rand(1, 10 - a));
+    }
+    const tens = level === 3 && Math.random() < 0.3;
+    const unit = tens ? 10 : 1;
+    if (Math.random() < 0.5) {
+      const a = rand(1, 9);
+      const b = rand(1, Math.min(9, (tens ? 10 : 20) - a));
+      return fact(a * unit, '+', b * unit);
+    }
+    const a = rand(tens ? 2 : 5, tens ? 10 : 20);
+    return fact(a * unit, '−', rand(1, Math.min(a - 1, 9)) * unit);
+  }
+  const by = level === 1 ? pick([2, 5, 10]) : rand(2, level === 2 ? 10 : 12);
+  const n = rand(level === 3 ? 2 : 1, level === 3 ? 12 : 10);
+  if (level === 3 && Math.random() < 0.3) return fact(by * n, '÷', by);
+  return Math.random() < 0.5 ? fact(by, '×', n) : fact(n, '×', by);
+}

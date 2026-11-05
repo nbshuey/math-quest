@@ -719,3 +719,18 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
   .confetti { display: none; }
   .shake, .feedback.good, .badge, .buddy, #decor span { animation: none !important; }
 }
+
+/* ----- Speed Round ----- */
+.speed-card { border: 3px solid var(--gold); }
+.speed-best { font-weight: 800; font-size: 0.9rem; margin-top: 4px; }
+.speed-intro .levels { margin: 16px 0; }
+.speed-count { display: grid; place-items: center; min-height: 70vh; }
+.countdown { font-size: 8rem; font-weight: 800; color: var(--primary); animation: pop 0.5s; }
+.speed-q { position: relative; }
+.speed-score { position: absolute; top: 12px; left: 16px; font-size: 1.3rem; }
+.speed-fact { font-size: clamp(2.6rem, 10vw, 4rem); }
+.speed-fact.pop { animation: pop 0.25s; }
+.speed-fact.missed { color: var(--bad); }
+.progress.timer div { transition: width 0.1s linear; }
+.progress.timer div.low { background: var(--bad); }
+.speed-big { font-size: 5rem; font-weight: 800; line-height: 1; margin: 8px 0; }

@@ -9,6 +9,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Grade 2** (11 topics): addition & subtraction within 100 (including word problems), place value, skip counting, comparing numbers, even & odd (partner dots), equal groups & arrays, counting coins, telling time (clock face, elapsed time), picture & bar graphs, shapes (sides, corners, halves/thirds/fourths)
   - **Grade 4** (13 topics): times tables to 12, multi-digit multiplication, division with remainders, multi-digit add & subtract (carrying, borrowing across zeros), factors, multiples & primes, equivalent fractions, comparing fractions (with fraction bars), adding & subtracting fractions, decimals (tenths & hundredths, with hundred grids), rounding, place value to millions, area & perimeter, measurement conversions
   - **Mixed Challenge** for each grade
+- **⚡ Speed Round**: answer as many quick facts as you can in 1 or 2 minutes (grade 2: add & subtract within 20, plus tens on Hard; grade 4: times tables, plus division facts on Hard). Answers check by themselves, a miss shows the right answer and keeps going, and missed facts come back more often until they're right. 1 coin per right answer, +5 for a new best, with bests kept per level and time.
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
 - **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button.
 - **Kid-friendly feedback**: the next hint step after the first miss, the answer shown after the second, and a review list at the end
@@ -25,6 +26,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **Focus areas**: tick the topics a kid is struggling with. They show first with a ⭐ badge, pay bonus coins, and come up about 4× as often in Mixed Challenge and Fix the Mistake.
   - **Progress per topic**: how often they're right the first time and how many explanations they got, counted under the real topic even in mixed rounds. 🔎 flags topics under 70%, 🧠 flags trouble explaining, 💡 flags topics where they use hints on half the questions or more.
   - **Explaining**: optionally ask "How do you know?" after every right answer.
+  - **Speed Round**: best scores and the facts to practice, plus a switch to hide the Speed Round if the clock is stressful.
   - **Weekly goal**: 3–10 quests a week, with a progress bar on the kid's screen and a bonus when it's reached.
   - **Note**: a short message the buddy shows on the quest screen ("Line up the places!").
   - **Recent quests**: the last 10 rounds with scores.
@@ -66,7 +68,6 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 ## Ideas for later
 
 - Angles and line plots (grade 4)
-- Timed "speed round" for times tables
 - Buddies that grow or evolve as kids earn stars
 - Picture steps in hints (draw the area model or number line as you go)
 - Adaptive difficulty based on recent answers
