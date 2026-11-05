@@ -106,43 +106,105 @@ const digitsOf = (n) => String(n).split('').reverse().map(Number); // ones first
 
 // Column adding or subtracting, one place at a time. Works the first two
 // places, then leaves the rest (and putting the digits together) to the kid.
+// A hint step with a little picture under it.
+const withPic = (text, pic) => (pic ? { text, pic } : text);
+export const stepText = (step) => (typeof step === 'string' ? step : step.text);
+
+// Column adding or subtracting, lined up by place, for hint pictures.
+// `marks` are the small carried/borrowed digits above, `result` the digits written so far,
+// and `place` the column being worked on (shown with a "?" when it has no digit yet).
+function colPic(a, b, add, { marks = {}, result = {}, place = -1 }) {
+  const answer = add ? a + b : a - b;
+  const cols = Math.max(String(a).length, String(b).length, String(answer).length);
+  const cell = (p, text, cls = '') => `<span class="${cls}${p === place ? ' hl' : ''}">${text}</span>`;
+  const row = (fn, first = '') => `<span class="op">${first}</span>${Array.from({ length: cols }, (_, c) => fn(cols - 1 - c)).join('')}`;
+  const da = digitsOf(a);
+  const db = digitsOf(b);
+  return `<div class="colpic" style="--n:${cols + 1}">
+    ${row((p) => cell(p, marks[p] ?? '', 'mark'))}
+    ${row((p) => cell(p, da[p] ?? '', marks[p] !== undefined && !add ? 'struck' : ''))}
+    ${row((p) => cell(p, db[p] ?? '', 'under'), add ? '+' : '−')}
+    ${row((p) => cell(p, result[p] ?? (p === place ? '?' : '')))}
+  </div>`;
+}
+
+// Column adding or subtracting, one place at a time. Works the first two
+// places, then leaves the rest (and putting the digits together) to the kid.
 function columnSteps(a, b, add) {
   const top = digitsOf(a);
   const bottom = digitsOf(b);
   const steps = [];
+  const marks = {};
+  const result = {};
+  const snap = (place) => colPic(a, b, add, { marks: { ...marks }, result: { ...result }, place });
   let carry = 0;
   for (let i = 0; i < top.length; i++) {
     const [x, y] = [top[i], bottom[i] ?? 0];
     const name = cap(PLACES[i]);
     const last = i === top.length - 1 || (i === 2 && top.length > 3);
     if (last && i >= 2 && top.length > 3) {
-      steps.push(`Keep going left the same way: ${PLACES.slice(2, top.length).join(', ')}.${add ? ' Remember any carried 1!' : ''}`);
+      steps.push(withPic(`Keep going left the same way: ${PLACES.slice(2, top.length).join(', ')}.${add ? ' Remember any carried 1!' : ''}`, snap(i)));
       break;
     }
     if (add) {
       const sum = x + y + carry;
       const shown = `${name}: ${x} + ${y}${carry ? ' + 1 carried' : ''}`;
-      if (last) steps.push(`${shown} = ?`);
-      else steps.push(`${shown} = ${sum}.${sum >= 10 ? ` Write ${sum % 10} and carry 1 to the ${PLACES[i + 1]}.` : ''}`);
+      if (last) {
+        steps.push(withPic(`${shown} = ?`, snap(i)));
+        break;
+      }
+      result[i] = sum % 10;
+      if (sum >= 10) marks[i + 1] = '1';
+      steps.push(withPic(`${shown} = ${sum}.${sum >= 10 ? ` Write ${sum % 10} and carry 1 to the ${PLACES[i + 1]}.` : ''}`, snap(i)));
       carry = sum >= 10 ? 1 : 0;
     } else {
       if (last) {
-        steps.push(`${name}: ${x} − ${y} = ?`);
+        steps.push(withPic(`${name}: ${x} − ${y} = ?`, snap(i)));
         break;
       }
       if (x < y) {
         let j = i + 1;
-        while (top[j] === 0) top[j++] = 9;
+        while (top[j] === 0) {
+          top[j] = 9;
+          marks[j++] = '9';
+        }
         top[j]--;
+        marks[j] = String(top[j]);
+        marks[i] = String(x + 10);
+        result[i] = x + 10 - y;
         const from = j === i + 1 ? `the ${PLACES[i + 1]}` : `the ${PLACES[j]} (the zeros in between become 9s)`;
-        steps.push(`${name}: ${x} is less than ${y}, so borrow 1 from ${from}. Now ${x + 10} − ${y} = ${x + 10 - y}.`);
-      } else steps.push(`${name}: ${x} − ${y} = ${x - y}.`);
+        steps.push(withPic(`${name}: ${x} is less than ${y}, so borrow 1 from ${from}. Now ${x + 10} − ${y} = ${x + 10 - y}.`, snap(i)));
+      } else {
+        result[i] = x - y;
+        steps.push(withPic(`${name}: ${x} − ${y} = ${x - y}.`, snap(i)));
+      }
     }
   }
   const shorter = String(add ? a + b : a - b).length < top.length;
   steps.push(`Put the digits together, from the left.${shorter ? ' No need to write a 0 at the front.' : ''}`);
   return steps;
 }
+
+// Hops along a number line: start, then n hops of `step`. With `hide`, the last stop is a "?".
+function hopsPic(start, step, n, hide = true) {
+  const gap = n > 10 ? 30 : 42;
+  const w = 36 + gap * n;
+  const x = (i) => 18 + i * gap;
+  const label = `${step > 0 ? '+' : '−'}${Math.abs(step)}`;
+  const stops = Array.from({ length: n + 1 }, (_, i) => {
+    const v = i === n && hide ? '?' : fmt(start + i * step);
+    return `<line x1="${x(i)}" y1="38" x2="${x(i)}" y2="46" class="hop-tick"/><text x="${x(i)}" y="62" class="hop-num">${v}</text>`;
+  }).join('');
+  const arcs = Array.from({ length: n }, (_, i) => {
+    const [a, b] = [x(i) + 3, x(i + 1) - 3];
+    return `<path d="M${a},40 Q${(a + b) / 2},${gap > 30 ? 12 : 18} ${b},40" class="hop-arc"/>${n <= 12 ? `<text x="${(a + b) / 2}" y="${gap > 30 ? 20 : 24}" class="hop-label">${label}</text>` : ''}`;
+  }).join('');
+  return `<svg class="hops" viewBox="0 0 ${w} 70" style="--w:${w}" aria-hidden="true"><line x1="4" y1="42" x2="${w - 4}" y2="42" class="hop-line"/>${arcs}${stops}</svg>`;
+}
+
+// Equal groups as rows of dots.
+const dotRows = (rows, cols) =>
+  `<div class="dots">${Array.from({ length: rows }, () => `<span>${'●'.repeat(cols)}</span>`).join('')}</div>`;
 
 // A tip for multiplying by a number like 60, 100 or 12.
 function timesTip(n, f) {
@@ -178,7 +240,7 @@ function addition(level) {
         ],
       );
   const steps = level === 1
-    ? [`Start with the bigger number: ${big}. Keep it in your head.`, `Count up ${small} more on your fingers, starting with ${big + 1}.`, 'What number did you stop on?']
+    ? [`Start with the bigger number: ${big}. Keep it in your head.`, withPic(`Count up ${small} more on your fingers, starting with ${big + 1}.`, hopsPic(big, 1, small)), 'What number did you stop on?']
     : columnSteps(a, b, true);
   const base = { answer: String(sum), hint, steps, why: reasoning, mistake: ones >= 10 ? byPlace(a, b, (x, y) => x + y) : undefined };
   if (Math.random() < 0.3) {
@@ -210,7 +272,7 @@ function subtraction(level) {
         `Take away just the ones: ${a} − ${b % 10} = ${a - (b % 10)}.`,
       ]);
   const steps = level === 1
-    ? [`Think addition: ${b} + ? = ${a}.`, `Start at ${b} and count up to ${a} on your fingers.`, 'How many fingers did you count?']
+    ? [`Think addition: ${b} + ? = ${a}.`, withPic(`Start at ${b} and count up to ${a} on your fingers.`, hopsPic(b, 1, a - b, false)), 'How many fingers did you count? (Count the hops!)']
     : columnSteps(a, b, false);
   const base = { answer: String(a - b), hint, steps, why: reasoning, mistake: borrow ? byPlace(a, b, (x, y) => Math.abs(x - y)) : undefined };
   if (Math.random() < 0.3) {
@@ -315,7 +377,7 @@ function skipCount(level) {
     hint: `Each number goes ${dir} by ${step}.`,
     steps: [
       `Look at two numbers next to each other: ${seq[k]} and ${seq[k + 1]}.`,
-      `How far apart are they? Each number goes ${dir} by ${step}.`,
+      withPic(`How far apart are they? Each number goes ${dir} by ${step}.`, hopsPic(seq[0], down ? -step : step, missing)),
       `The number before the blank is ${seq[missing - 1]}. ${seq[missing - 1]} ${down ? '−' : '+'} ${step} = ?`,
     ],
     why: why(`It goes ${dir} by ${step} each time.`, [`It goes ${dir} by 1 each time.`, `It goes ${dir} by ${step * 2} each time.`]),
@@ -441,7 +503,7 @@ function factSteps(a, b) {
     const times = by === a ? b : a;
     return [
       `${a} × ${b} means ${times} groups of ${by}.`,
-      `Skip count by ${by}s and hold up a finger each time: ${multiples(by, Math.min(3, times - 1))}…`,
+      withPic(`Skip count by ${by}s and hold up a finger each time: ${multiples(by, Math.min(3, times - 1))}…`, times * by <= 60 ? dotRows(times, by) : ''),
       `Keep going until you have ${times} fingers up. Where do you land?`,
     ];
   }
@@ -450,7 +512,7 @@ function factSteps(a, b) {
   return [
     `Break ${hi} into ${chunk} + ${hi - chunk}.`,
     `${chunk} × ${lo} = ${chunk * lo}. ${hi - chunk} × ${lo} = ${(hi - chunk) * lo}.`,
-    `Add them: ${chunk * lo} + ${(hi - chunk) * lo} = ?`,
+    withPic(`Add them: ${chunk * lo} + ${(hi - chunk) * lo} = ?`, areaModel([chunk, hi - chunk], lo)),
   ];
 }
 
@@ -497,7 +559,7 @@ function multBig(level) {
           `Break ${fmt(a)} into ${parts.map(fmt).join(' + ')}.`,
           zeroTip,
           `Multiply each part by ${b}: ${parts.map((p) => `${fmt(p)} × ${b} = ${fmt(p * b)}`).join(', ')}.`,
-          `Add them up: ${parts.map((p) => fmt(p * b)).join(' + ')} = ?`,
+          withPic(`Add them up: ${parts.map((p) => fmt(p * b)).join(' + ')} = ?`, areaModel(parts, b)),
         ];
     return {
       prompt: `${fmt(a)} × ${b} = ?`,
@@ -528,7 +590,7 @@ function multBig(level) {
       `Break ${b} into ${tens} + ${ones}.`,
       `${a} × ${tens}: do ${a} × ${tens / 10} = ${fmt((a * tens) / 10)}, then put a 0 on the end: ${fmt(a * tens)}.`,
       `${a} × ${ones} = ${fmt(a * ones)}.`,
-      `Add them: ${fmt(a * tens)} + ${fmt(a * ones)} = ?`,
+      withPic(`Add them: ${fmt(a * tens)} + ${fmt(a * ones)} = ?`, areaModel(parts, a)),
     ],
     why: why(
       `Break ${b} into ${parts.join(' + ')}. ${parts.map((p) => `${a} × ${p} = ${fmt(a * p)}`).join(', ')}. Add: ${fmt(a * b)}.`,
@@ -608,7 +670,10 @@ function equivFractions(level) {
     steps: [
       `Look at the ${missingTop ? 'bottoms' : 'tops'}: ${known[0]} and ${known[1]}.`,
       `${known[0]} ${simplify ? '÷' : '×'} ${k} = ${known[1]}. So it was ${verb} by ${k}.`,
-      `Do the same to the ${missingTop ? 'top' : 'bottom'}: ${missingTop ? left[0] : left[1]} ${simplify ? '÷' : '×'} ${k} = ?`,
+      withPic(
+        `Do the same to the ${missingTop ? 'top' : 'bottom'}: ${missingTop ? left[0] : left[1]} ${simplify ? '÷' : '×'} ${k} = ?`,
+        missingTop && !simplify && right[1] <= 24 ? `<div class="bars">${bar(...left)}${bar(0, right[1])}</div><small class="pic-note">Shade the same amount on the bottom bar.</small>` : '',
+      ),
     ],
     why: why(
       `${simplify ? 'Divide' : 'Multiply'} the top and the bottom by the same number, ${k}. The bars show the same amount.`,
@@ -691,7 +756,7 @@ function compareFractions(level) {
       : level === 2
         ? 'Look at how much of each bar is colored. You can also compare each fraction to 1/2.'
         : 'Make the bottoms the same, or compare each fraction to 1/2.',
-    steps,
+    steps: level === 3 ? [withPic(steps[0], bars), ...steps.slice(1)] : steps,
     why: why(right, wrong, bars),
     mistake: { '<': '>', '>': '<', '=': pick(['<', '>']) }[answer],
   };
@@ -723,7 +788,7 @@ function rounding(level) {
     answer: String(answer),
     hint: `Look at the ${rightName} digit: it's ${rightDigit}. 5 or more → round up. 4 or less → round down.`,
     steps: [
-      `${fmt(n)} is between ${fmt(low)} and ${fmt(high)}.`,
+      withPic(`${fmt(n)} is between ${fmt(low)} and ${fmt(high)}.`, numberLine(low, high, n)),
       `Look at the ${rightName} digit, just to the right of the ${name}s place: it's ${rightDigit}.`,
       `5 or more rounds up to ${fmt(high)}. 4 or less rounds down to ${fmt(low)}. Which one?`,
     ],
@@ -1588,7 +1653,7 @@ function decimals(level) {
     hint: 'Give both numbers two places after the point (0.5 = 0.50), then compare.',
     steps: kind === 'plain'
       ? ['Both numbers have two places after the point.', `Compare the tenths first: ${L[2]} and ${R[2]}. If they're the same, compare the hundredths.`, 'Which sign fits?']
-      : ['Give both numbers two places after the point. 0.5 is the same as 0.50.', `So it's ${two(lv)} and ${two(rv)}.`, `Compare ${lv} hundredths and ${rv} hundredths. Which sign fits?`],
+      : ['Give both numbers two places after the point. 0.5 is the same as 0.50.', withPic(`So it's ${two(lv)} and ${two(rv)}.`, grids), `Compare ${lv} hundredths and ${rv} hundredths. Which sign fits?`],
     why: why(right, wrong, grids),
     mistake: kind === 'trap' ? (L === long ? '>' : '<') : kind === 'equal' ? (L === long ? '>' : '<') : { '<': '>', '>': '<' }[answer],
   };
@@ -2051,6 +2116,8 @@ function wrongAnswerFor(q) {
 // "Fix the Mistake": the buddy answers a question (right 40% of the time)
 // and the kid decides whether the buddy is right, then explains why.
 // "{buddy}" is replaced with the buddy's name by the app.
+const prefixStep = (pre, step) => (typeof step === 'string' ? `${pre} ${step}` : { ...step, text: `${pre} ${step.text}` });
+
 function mistakeTopic(topics) {
   return {
     id: 'mistake',
@@ -2078,7 +2145,7 @@ function mistakeTopic(topics) {
         choices: [RIGHT, WRONG],
         hint: "Solve it yourself first. Then check {buddy}'s answer.",
         steps: base.steps?.length
-          ? [`Solve it yourself first. ${base.steps[0]}`, ...base.steps.slice(1), "Now check: does {buddy}'s answer match yours?"]
+          ? [prefixStep('Solve it yourself first.', base.steps[0]), ...base.steps.slice(1), "Now check: does {buddy}'s answer match yours?"]
           : undefined,
         why: base.why,
         whyAsk: "What's the right thinking?",

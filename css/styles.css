@@ -825,3 +825,25 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .grew { font-size: 1.3rem; font-weight: 800; color: #5c4400; background: #fff3bf; border: 3px solid var(--gold); border-radius: 16px; padding: 10px; margin: 10px 0; animation: pop 0.5s; }
 .shop-stage { font-size: 0.85rem; font-weight: 800; color: var(--muted); margin: -2px 0 4px; }
 @media (prefers-reduced-motion: reduce) { .buddy::after, .buddy::before { animation: none !important; } .buddy.growing { animation: none; } }
+
+/* ----- Picture hint steps ----- */
+.step-pic { margin: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; animation: pop 0.35s; color: var(--ink); }
+.step-pic .bar { width: min(280px, 64vw); height: 20px; }
+.step-pic .bars { margin-top: 0; }
+.pic-note { color: #7a5a00; font-weight: 700; }
+.colpic { display: grid; grid-template-columns: repeat(var(--n), 1.25em); font: 800 1.35rem/1.15 ui-monospace, 'SF Mono', Menlo, monospace; background: #fff; border-radius: 12px; padding: 6px 12px; }
+.colpic span { text-align: center; }
+.colpic .mark { font-size: 0.75em; color: var(--bad); min-height: 1em; }
+.colpic .struck { text-decoration: line-through; text-decoration-color: var(--bad); text-decoration-thickness: 2px; }
+.colpic .under { border-bottom: 3px solid var(--ink); }
+.colpic .op { color: var(--muted); }
+.colpic .hl { background: #fff3bf; }
+.hops { width: min(calc(var(--w) * 1.2px), 100%); background: #fff; border-radius: 12px; padding: 4px 6px; }
+.hops .hop-line, .hops .hop-tick { stroke: var(--ink); stroke-width: 2.5; }
+.hops .hop-arc { fill: none; stroke: var(--primary); stroke-width: 2.5; }
+.hops .hop-num { font-size: 15px; font-weight: 800; text-anchor: middle; fill: var(--ink); }
+.hops .hop-label { font-size: 10px; font-weight: 800; text-anchor: middle; fill: var(--primary); }
+.dots { display: flex; flex-direction: column; gap: 2px; background: #fff; border-radius: 12px; padding: 6px 12px; color: var(--primary); font-size: 0.95rem; letter-spacing: 3px; line-height: 1.1; }
+.step-pic .area { transform: scale(0.85); }
+.step-pic .nline { width: min(300px, 70vw); }
+.step-pic .hgrids { transform: scale(0.85); }

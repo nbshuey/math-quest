@@ -1,4 +1,4 @@
-import { TOPICS, GRADES, LEVELS, speedFact } from './problems.js';
+import { TOPICS, GRADES, LEVELS, speedFact, stepText } from './problems.js';
 import { BUDDIES, HATS, THEMES, CATALOG, STAGES, stageFor } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
@@ -795,7 +795,9 @@ function loadQuestion() {
   session.levelCounts[q.level]++;
   const name = buddyName(currentProfile());
   for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
-  q.steps = (q.steps?.length ? q.steps : [q.hint]).map((step) => step.replaceAll('{buddy}', name));
+  // Each step is its text, or { text, pic } with a little picture.
+  q.steps = (q.steps?.length ? q.steps : [q.hint]).map((step) =>
+    typeof step === 'string' ? step.replaceAll('{buddy}', name) : { ...step, text: step.text.replaceAll('{buddy}', name) });
   if (WHY_AT.includes(session.index)) session.whyDue = true;
   Object.assign(session, { current: q, attempts: 0, locked: false, input: '', stepsShown: 0 });
   renderQuestion();
@@ -913,10 +915,13 @@ function showHint() {
   if (n >= q.steps.length) return;
   if (n === 0) recordHint(q);
   session.stepsShown++;
-  const step = q.steps[n];
+  const step = stepText(q.steps[n]);
+  const pic = q.steps[n].pic;
   const list = app.querySelector('#steps');
   list.querySelectorAll('li').forEach((li) => li.classList.remove('latest'));
-  list.insertAdjacentHTML('beforeend', `<li class="latest"><span>${esc(step)}</span> ${sayButton(`step-${n}`, `Read step ${n + 1} aloud`)}</li>`);
+  // Only the newest step keeps its picture, so the card doesn't get too tall.
+  list.querySelectorAll('.step-pic').forEach((el) => el.remove());
+  list.insertAdjacentHTML('beforeend', `<li class="latest"><span>${esc(step)}</span> ${sayButton(`step-${n}`, `Read step ${n + 1} aloud`)}${pic ? `<div class="step-pic">${pic}</div>` : ''}</li>`);
   list.querySelector(`[data-say="step-${n}"]`)?.addEventListener('click', () => speak(step));
   app.querySelector('#hint').classList.remove('hidden');
 

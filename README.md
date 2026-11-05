@@ -12,7 +12,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **⚡ Speed Round**: answer as many quick facts as you can in 1 or 2 minutes (grade 2: add & subtract within 20, plus tens on Hard; grade 4: times tables, plus division facts on Hard). Answers check by themselves, a miss shows the right answer and keeps going, and missed facts come back more often until they're right. 1 coin per right answer, +5 for a new best, with bests kept per level and time.
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
 - **🧭 Auto level**: each topic (and the Speed Round) keeps its own level. During a round it goes up after 3 first-try answers in a row and down after 2 misses in a row, with the buddy announcing the change. Coins and stars follow the level each question was at. The Speed Round levels up after a fast round (15+ a minute, 90% right) and down when under 70% are right. Kids pick it on the quest screen; grown-ups can switch it on the Grown-ups page and see each topic's current level.
-- **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button.
+- **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button. Many steps come with a picture: adding and subtracting lined up in columns (with carried and borrowed digits), hops on a number line for counting on and skip counting, dot rows and area models for multiplying, a number line for rounding, and fraction bars and hundred grids for fractions and decimals.
 - **Kid-friendly feedback**: the next hint step after the first miss, the answer shown after the second, and a review list at the end
 - **Reasoning practice**:
   - **🧠 How do you know?**: on questions 3, 6 and 9 (or the next one answered right first try), kids pick the explanation that matches the thinking. Many come with a picture model: area models for multiplication, number lines for rounding, fraction bars. Right explanations earn bonus coins.
@@ -39,13 +39,15 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 
 ## Running it
 
-No build step or dependencies. Serve the folder with any static server:
+No build step or dependencies. From this folder, run:
 
 ```bash
-python3 -m http.server 5173
+python3 serve.py
 ```
 
-Then open http://localhost:5173.
+Then open http://localhost:8000. `serve.py` is a tiny static server that tells the browser to always check for newer files, so updates show up with a normal refresh. (`python3 -m http.server` works too, but the browser may keep old files after an update; press Cmd+Shift+R if the page is blank.)
+
+Progress is saved per address, so keep using the same port (8000) to keep the kids' progress.
 
 ## Project layout
 
@@ -70,4 +72,3 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 
 ## Ideas for later
 
-- Picture steps in hints (draw the area model or number line as you go)
