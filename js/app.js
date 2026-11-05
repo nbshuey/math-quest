@@ -1,5 +1,5 @@
 import { TOPICS, GRADES, LEVELS, speedFact, stepText } from './problems.js';
-import { BUDDIES, HATS, THEMES, CATALOG, STAGES, stageFor } from './shop.js';
+import { BUDDIES, HATS, EXTRAS, THEMES, CATALOG, STAGES, stageFor } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
 import { speak, stopSpeaking, choiceWords, canSpeak } from './speech.js';
@@ -30,7 +30,10 @@ const levelById = (id) => LEVELS.find((l) => l.id === id) ?? LEVELS[1];
 const topicLevel = (p, topicId) => (p.autoLevel ? p.topicLevels[topicId] ?? p.level : p.level);
 const AUTO_UP = 3; // right on the first try this many times in a row → a level up
 const AUTO_DOWN = 2; // missed the first try this many times in a row → a level down
-const owns = (p, tab, item) => item.price === 0 || p.owned[tab].includes(item.id);
+// Special items (with `needs`) unlock once any buddy grows to that stage.
+const maxStage = (p) => Math.max(0, ...Object.values(p.buddyXp ?? {}).map(stageFor));
+const owns = (p, tab, item) => (item.needs ? maxStage(p) >= item.needs : item.price === 0) || p.owned[tab].includes(item.id);
+const unlocksAt = (stage) => Object.values(CATALOG).flatMap((c) => c.items).filter((i) => i.needs === stage);
 const starRow = (n, max = 3) =>
   `<span class="stars">${Array.from({ length: max }, (_, i) => `<span class="${i < n ? '' : 'off'}">★</span>`).join('')}</span>`;
 const buddyName = (p) => buddyOf(p).name.split(' ')[0];
@@ -83,8 +86,12 @@ const buddyXp = (p, id = p.buddy) => p.buddyXp[id] ?? 0;
 // Adds this round's coins to the buddy's growth. Returns the stages before and after.
 function growBuddy(p, coins) {
   const before = stageFor(buddyXp(p));
+  const maxBefore = maxStage(p);
   p.buddyXp[p.buddy] = buddyXp(p) + coins;
-  return { before, after: stageFor(buddyXp(p)) };
+  // Special shop items unlocked for the first time by this growth.
+  const unlocked = [];
+  for (let st = maxBefore + 1; st <= maxStage(p); st++) unlocked.push(...unlocksAt(st));
+  return { before, after: stageFor(buddyXp(p)), unlocked };
 }
 
 // A progress bar toward the buddy's next stage.
@@ -105,12 +112,15 @@ function growLine(p, gained = 0) {
 function grewLine(p, grown) {
   if (grown.after <= grown.before) return '';
   const s = STAGES[grown.after];
-  return `<div class="grew">🎉 ${esc(buddyName(p))} grew into a <strong>${s.emoji} ${s.name}</strong> buddy!</div>`;
+  const prizes = grown.unlocked.length ? `<small class="grew-unlock">🎁 New in the shop: ${grown.unlocked.map((i) => `${i.emoji} ${esc(i.name)}`).join(', ')}</small>` : '';
+  return `<div class="grew">🎉 ${esc(buddyName(p))} grew into a <strong>${s.emoji} ${s.name}</strong> buddy!${prizes}</div>`;
 }
 
 function buddyHtml(p, size = '') {
   const hat = HATS.find((h) => h.id === p.hat);
+  const extra = EXTRAS.find((x) => x.id === p.extra);
   return `<div class="buddy ${size} stage-${stageFor(buddyXp(p))}" id="buddy">
+    ${extra && extra.id !== 'none' ? `<span class="buddy-extra">${extra.emoji}</span>` : ''}
     <span class="buddy-hat">${hat && hat.id !== 'none' ? hat.emoji : ''}</span>
     <span class="buddy-body">${buddyOf(p).emoji}</span>
   </div>`;
@@ -337,23 +347,29 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
   applyLook(p);
   const { items, slot } = CATALOG[tab];
 
-  const cards = items
+  // Cheapest first; special unlockable items at the end.
+  const cards = [...items]
+    .sort((a, b) => (a.needs ? 1 : 0) - (b.needs ? 1 : 0) || a.price - b.price)
     .map((item) => {
       const owned = owns(p, tab, item);
       const using = p[slot] === item.id;
       let button;
       if (using) button = '<button class="buy-btn using" disabled>✓ Using</button>';
       else if (owned) button = `<button class="buy-btn owned" data-use="${item.id}">Use</button>`;
+      else if (item.needs) button = `<button class="buy-btn locked special" disabled>🔒 Grow a ${STAGES[item.needs].emoji} ${STAGES[item.needs].name} buddy</button>`;
       else if (p.coins >= item.price) button = `<button class="buy-btn" data-buy="${item.id}">🪙 ${item.price}</button>`;
       else button = `<button class="buy-btn locked" disabled>🔒 🪙 ${item.price}</button>`;
       const art = tab === 'themes'
         ? `<div class="theme-swatch" style="background:${item.swatch}">${item.emoji}</div>`
         : tab === 'hats'
           ? `<div class="shop-emoji hat-preview"><span>${item.id === 'none' ? '' : item.emoji}</span><span>${buddyOf(p).emoji}</span></div>`
-          : `<div class="shop-emoji">${item.emoji}</div>`;
+          : tab === 'extras'
+            ? `<div class="shop-emoji extra-preview"><span>${buddyOf(p).emoji}</span><span>${item.id === 'none' ? '' : item.emoji}</span></div>`
+            : `<div class="shop-emoji">${item.emoji}</div>`;
       const st = tab === 'buddies' && owned ? STAGES[stageFor(buddyXp(p, item.id))] : null;
       const stage = st ? `<div class="shop-stage">${st.emoji} ${st.name}</div>` : '';
-      return `<div class="shop-item ${using ? 'equipped' : ''}">${art}<div class="shop-name">${esc(item.name)}</div>${stage}${button}</div>`;
+      const badge = item.needs ? `<span class="special-tag">${STAGES[item.needs].emoji} Special</span>` : '';
+      return `<div class="shop-item ${using ? 'equipped' : ''} ${item.needs ? 'special' : ''}">${badge}${art}<div class="shop-name">${esc(item.name)}</div>${stage}${button}</div>`;
     })
     .join('');
 
@@ -366,6 +382,8 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
       </div>
       <div class="shop-grid">${cards}</div>
       <p class="shop-tip">Earn coins by answering on the first try. Hard quests pay 🪙 ×3!
+        ${tab === 'extras' ? '<br>Extras are things your buddy holds. Every buddy can use them.' : ''}
+        ${tab === 'buddies' || tab === 'hats' || tab === 'extras' ? '<br>✨🌟 Special items are free: they unlock when one of your buddies grows big enough!' : ''}
         ${tab === 'buddies' ? '<br>Your buddy grows with every coin you earn together: 🍼 Baby → 🌱 Little → 🌿 Big → ✨ Super → 🌟 Legend. Spending coins never shrinks them!' : ''}</p>
     </div>`);
 

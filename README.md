@@ -21,7 +21,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **Reading help** (per player, in ✏️ Edit player):
   - **🔊 Read aloud**: every question, hint and explanation has a speaker button, and math is read as words ("3 eighths", "remainder 2"). Can also read every question automatically.
   - **🔤 Easy-reading text**: Lexend font, extra letter and line spacing, left-aligned word problems, a softer background and no floating decorations.
-- **Buddy & shop**: each player has a buddy who cheers them on. Coins buy new buddies (wizard, dragon, unicorn, robot…), hats, and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents.
+- **Buddy & shop**: each player has a buddy who cheers them on. Coins buy 28 buddies (fox, penguin, ninja, mermaid, astronaut, superhero, dragon…), 14 hats, 14 extras for the buddy to hold (balloon, guitar, magic wand, skateboard, rocket…), and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents. ✨🌟 Special items (Giant gem, Star clip, Math trophy, Blaze the Eagle) can't be bought: they unlock free when any buddy grows to 🌿 Big, ✨ Super or 🌟 Legend, and the results screen announces them.
 - **🌱 Growing buddies**: buddies grow with every coin earned together: 🍼 Baby → 🌱 Little (40) → 🌿 Big (120) → ✨ Super (260, sparkles) → 🌟 Legend (500, golden glow). Each buddy grows on its own, a progress bar on the quest screen shows the next stage, and growing up gets a celebration on the results screen. Spending coins never shrinks a buddy; older saves start the current buddy with credit for rounds already played.
 - **Rewards**: up to 3 stars per quest and level, coins for first-try answers (×1 / ×2 / ×3 by level), streaks 🔥, confetti and sounds
 - **👪 Grown-ups page** (button on the home screen, optional 4-digit PIN):
@@ -70,5 +70,4 @@ Write a generator in `js/problems.js` that takes a level (1–3) and returns `{ 
 
 Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also needs a `body[data-theme='…']` block in `css/styles.css`.
 
-## Ideas for later
 

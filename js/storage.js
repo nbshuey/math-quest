@@ -19,6 +19,7 @@ function normalizeProfile(p) {
     topicLevels: {}, // topic id → level, for Auto
     buddy: 'cat',
     hat: 'none',
+    extra: 'none', // something the buddy holds
     theme: 'sunny',
     autoRead: false,
     easyRead: false,
@@ -36,7 +37,7 @@ function normalizeProfile(p) {
     stats: {},
     history: [],
     ...p,
-    owned: { buddies: [], hats: [], themes: [], ...p.owned },
+    owned: { buddies: [], hats: [], extras: [], themes: [], ...p.owned },
   };
   // Buddy growth (coins earned with each buddy). Older saves start the current
   // buddy with credit for the rounds already played, so it doesn't shrink.
