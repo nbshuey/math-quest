@@ -29,6 +29,8 @@ export function toSpeech(text) {
     .replace(/__/g, ' blank ')
     .replace(/(^|\s)\?(?=\s|$|\.)/g, '$1blank')
     .replace(/¢/g, ' cents')
+    .replace(/°/g, ' degrees')
+    .replace(/✕/g, ' X ')
     .replace(/→/g, ', ')
     .replace(/\s+/g, ' ')
     .trim();

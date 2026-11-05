@@ -7,7 +7,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **Player profiles**: each kid gets a name, an avatar and a grade level.
 - **Grade-matched quests** (10 questions per round):
   - **Grade 2** (11 topics): addition & subtraction within 100 (including word problems), place value, skip counting, comparing numbers, even & odd (partner dots), equal groups & arrays, counting coins, telling time (clock face, elapsed time), picture & bar graphs, shapes (sides, corners, halves/thirds/fourths)
-  - **Grade 4** (13 topics): times tables to 12, multi-digit multiplication, division with remainders, multi-digit add & subtract (carrying, borrowing across zeros), factors, multiples & primes, equivalent fractions, comparing fractions (with fraction bars), adding & subtracting fractions, decimals (tenths & hundredths, with hundred grids), rounding, place value to millions, area & perimeter, measurement conversions
+  - **Grade 4** (15 topics): times tables to 12, multi-digit multiplication, division with remainders, multi-digit add & subtract (carrying, borrowing across zeros), factors, multiples & primes, equivalent fractions, comparing fractions (with fraction bars), adding & subtracting fractions, decimals (tenths & hundredths, with hundred grids), rounding, place value to millions, area & perimeter, measurement conversions, angles (acute/right/obtuse/straight, reading a two-scale protractor, missing angles), line plots (whole numbers, quarters and eighths of an inch)
   - **Mixed Challenge** for each grade
 - **⚡ Speed Round**: answer as many quick facts as you can in 1 or 2 minutes (grade 2: add & subtract within 20, plus tens on Hard; grade 4: times tables, plus division facts on Hard). Answers check by themselves, a miss shows the right answer and keeps going, and missed facts come back more often until they're right. 1 coin per right answer, +5 for a new best, with bests kept per level and time.
 - **Difficulty levels**: 🌱 Easy (warm-up), ⭐ Medium (on grade level) and 🔥 Hard (challenge). Harder levels pay more coins, and a perfect round offers to bump up a level.
@@ -69,6 +69,5 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 
 ## Ideas for later
 
-- Angles and line plots (grade 4)
 - Buddies that grow or evolve as kids earn stars
 - Picture steps in hints (draw the area model or number line as you go)

@@ -1680,6 +1680,362 @@ function measurement(level) {
   };
 }
 
+/* ------------------------ Angles & line plots ------------------------ */
+
+const ANGLE_KINDS = ['Acute', 'Right angle', 'Obtuse', 'Straight'];
+const angleKind = (d) => (d < 90 ? 'Acute' : d === 90 ? 'Right angle' : d < 180 ? 'Obtuse' : 'Straight');
+
+// Angle pictures: the vertex sits at the bottom middle. Angles are in degrees,
+// counted counterclockwise from the ray pointing right.
+const AX = 120;
+const AY = 122;
+const R = 100;
+const at = (deg, r) => {
+  const a = (deg * Math.PI) / 180;
+  return [AX + r * Math.cos(a), AY - r * Math.sin(a)].map((v) => v.toFixed(1));
+};
+const ray = (deg, cls = 'ray', len = R) => {
+  const [x, y] = at(deg, len);
+  return `<line x1="${AX}" y1="${AY}" x2="${x}" y2="${y}" class="${cls}"/>`;
+};
+// The little mark in the corner: a square for 90°, otherwise an arc.
+function cornerMark(from, to, r = 20) {
+  if (to - from === 90) {
+    const [ax, ay] = at(from, 14);
+    const [bx, by] = at(to, 14);
+    const [cx, cy] = at(from + 45, 14 * Math.SQRT2);
+    return `<path d="M${ax},${ay} L${cx},${cy} L${bx},${by}" class="angle-mark"/>`;
+  }
+  const [ax, ay] = at(from, r);
+  const [bx, by] = at(to, r);
+  return `<path d="M${ax},${ay} A${r},${r} 0 0 0 ${bx},${by}" class="angle-mark"/>`;
+}
+const angleSvg = (inner, cls = '') => `<svg class="angle ${cls}" viewBox="0 0 240 132" aria-hidden="true">${inner}<circle cx="${AX}" cy="${AY}" r="3" class="vertex"/></svg>`;
+
+// A plain angle. `left` points the bottom ray left instead of right.
+function anglePic(deg, left = false) {
+  const [from, to] = left ? [180 - deg, 180] : [0, deg];
+  return angleSvg(`${cornerMark(from, to)}${ray(from)}${ray(to)}`);
+}
+
+// An angle on a protractor with two scales: outer numbers start at 0 on the right,
+// inner numbers start at 0 on the left.
+function protractorPic(deg, left) {
+  const [ex, ey] = at(0, R);
+  const [wx, wy] = at(180, R);
+  let marks = '';
+  for (let a = 0; a <= 180; a += 10) {
+    const [x1, y1] = at(a, R - 7);
+    const [x2, y2] = at(a, R);
+    const lift = a === 0 || a === 180 ? 4.5 : 0; // keep the end labels off the bottom line
+    const [ox, oy] = at(a, R - 15);
+    const [ix, iy] = at(a, R - 27);
+    marks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="pt-tick"/>
+      <text x="${ox}" y="${oy - lift}" class="pt-out">${a}</text><text x="${ix}" y="${iy - lift}" class="pt-in">${180 - a}</text>`;
+  }
+  for (let a = 5; a < 180; a += 10) {
+    const [x1, y1] = at(a, R - 4);
+    const [x2, y2] = at(a, R);
+    marks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="pt-tick"/>`;
+  }
+  const [from, to] = left ? [180 - deg, 180] : [0, deg];
+  return angleSvg(
+    // Rays go under the numbers (which have a white outline) and poke out past the edge.
+    `<path d="M${ex},${ey} A${R},${R} 0 0 0 ${wx},${wy} Z" class="protractor"/>${ray(from, 'ray', R + 10)}${ray(to, 'ray', R + 10)}${marks}`,
+    'big',
+  );
+}
+
+// A whole angle split into two parts, with one part labeled.
+function splitPic(total, k, knownFirst) {
+  const label = (from, to, text) => {
+    const [x, y] = at((from + to) / 2, 52);
+    return `<text x="${x}" y="${y}" class="angle-label">${text}</text>`;
+  };
+  return angleSvg(
+    `${total === 90 ? cornerMark(0, 90) : cornerMark(0, total, 14)}${ray(0)}${ray(k, 'ray part')}${ray(total)}
+     ${label(0, k, knownFirst ? `${k}°` : '?')}${label(k, total, knownFirst ? '?' : `${total - k}°`)}`,
+  );
+}
+
+const TURNS = [
+  ['a right angle', 90, 100],
+  ['a straight angle', 180, 90],
+  ['a quarter turn', 90, 25],
+  ['a half turn', 180, 50],
+  ['a full turn', 360, 180],
+];
+
+function angles(level) {
+  if (level === 1 && Math.random() < 0.2) {
+    const [what, deg, wrongDeg] = pick(TURNS);
+    return {
+      prompt: `How many degrees is ${what}?`,
+      answer: String(deg),
+      hint: 'A right angle (a square corner) is 90°. A straight line is 2 right angles.',
+      steps: ['A right angle is a square corner, like the corner of a paper. It is 90°.', 'A quarter turn is one square corner. A half turn is 2. A full turn is 4.', `So how many degrees is ${what}?`],
+      why: why(`${cap(what)} is ${deg / 90} right angle${deg > 90 ? 's' : ''}, and each right angle is 90°: ${deg}°.`, [
+        `It's ${wrongDeg}°.`,
+        deg === 90 ? 'A right angle is 100°, because 100 is a round number.' : `Every angle is 90°.`,
+      ]),
+      mistake: wrongDeg,
+      word: true,
+    };
+  }
+  if (level === 1) {
+    const kind = Math.random() < 0.1 ? 'Straight' : pick(['Acute', 'Right angle', 'Obtuse']);
+    const deg = { Acute: rand(4, 15) * 5, 'Right angle': 90, Obtuse: rand(21, 32) * 5, Straight: 180 }[kind];
+    const reasons = {
+      Acute: "It's smaller than a square corner (90°), so it's acute.",
+      'Right angle': 'It makes a square corner, exactly 90°. The little square shows it.',
+      Obtuse: "It opens wider than a square corner (90°) but isn't flat, so it's obtuse.",
+      Straight: "The two rays make one flat line: 180°. That's a straight angle.",
+    };
+    return {
+      prompt: 'What kind of angle is this?',
+      visual: anglePic(deg, Math.random() < 0.5),
+      summary: `An angle of about ${deg} degrees`,
+      spoken: '',
+      answer: kind,
+      choices: ANGLE_KINDS,
+      hint: 'Compare it to a square corner (90°). Smaller is acute, bigger is obtuse.',
+      steps: [
+        "Picture a square corner, like the corner of a paper. That's a right angle: 90°.",
+        'Is this angle smaller than the corner, the same, or bigger?',
+        'Smaller is acute. The same is a right angle. Bigger is obtuse. A flat line is straight. Which is it?',
+      ],
+      why: why(reasons[kind], [
+        kind === 'Obtuse' ? reasons.Acute : reasons.Obtuse,
+        'Longer rays make a bigger angle.',
+      ]),
+      mistake: { Acute: 'Obtuse', 'Right angle': 'Acute', Obtuse: 'Acute', Straight: 'Obtuse' }[kind],
+    };
+  }
+  if (level === 2) {
+    const deg = rand(1, 17) * 10;
+    const left = Math.random() < 0.5;
+    const scale = left ? 'inner' : 'outer';
+    const other = 180 - deg;
+    return {
+      prompt: 'How many degrees is this angle?',
+      visual: protractorPic(deg, left),
+      summary: `Protractor: an angle of ${deg} degrees`,
+      spoken: '',
+      answer: String(deg),
+      hint: 'Find the 0 where the bottom ray points. Read the numbers that start at that 0.',
+      steps: [
+        `The bottom ray points ${left ? 'left' : 'right'}. On the ${scale} numbers, that end is 0.`,
+        `So read the ${scale} numbers, counting up from that 0.`,
+        `Is the angle smaller or bigger than a square corner (90°)? Use that to check, then read where the other ray crosses. How many degrees?`,
+      ],
+      why: why(`The bottom ray is on the 0 of the ${scale} numbers. Counting up from there, the other ray is at ${deg}°. It's ${angleKind(deg).toLowerCase()}, so that makes sense.`, [
+        deg === 90 ? 'A square corner is 100°.' : `Read the other numbers: ${other}°.`,
+        `Count the big tick marks by 1s: ${deg / 10}.`,
+      ]),
+      mistake: deg !== 90 ? other : undefined,
+    };
+  }
+  // Hard: find the missing part of an angle.
+  const r = Math.random();
+  const total = r < 0.4 ? 90 : r < 0.75 ? 180 : rand(10, 17) * 10;
+  const k = rand(3, total / 5 - 3) * 5;
+  const knownFirst = Math.random() < 0.5;
+  const known = knownFirst ? k : total - k;
+  const answer = total - known;
+  const whole = total === 90 ? 'a right angle (90°)' : total === 180 ? 'a straight angle (180°)' : `${total}°`;
+  const altTotal = total === 180 ? (known < 90 ? 90 : 360) : 180;
+  return {
+    prompt: total === 90 || total === 180
+      ? `The two parts make ${whole}. One part is ${known}°. How big is the other part?`
+      : `The whole angle is ${total}°. One part is ${known}°. How big is the other part?`,
+    visual: splitPic(total, k, knownFirst),
+    summary: `${total}° split into ${known}° and ?`,
+    spoken: '',
+    answer: String(answer),
+    hint: `The two parts add up to ${total}°. Take away the part you know.`,
+    steps: [`The two parts add up to the whole angle: ${total}°.`, `So ${known} + ? = ${total}.`, `${total} − ${known} = ?`],
+    why: why(`The parts add up to the whole: ${known}° + ${answer}° = ${total}°.`, [
+      `Add them: ${total} + ${known} = ${total + known}.`,
+      `Use ${altTotal}° for the whole: ${altTotal} − ${known} = ${altTotal - known}.`,
+    ]),
+    mistake: altTotal - known,
+    word: true,
+  };
+}
+
+// A line plot: a number line with an X for each item above its value.
+function linePlotPic(title, ticks, counts) {
+  const gap = 46;
+  const w = 40 + gap * (ticks.length - 1);
+  const top = Math.max(...counts);
+  const h = 44 + top * 15;
+  const base = h - 26;
+  const xs = ticks.map((_, i) => 20 + i * gap);
+  const marks = counts
+    .flatMap((c, i) => Array.from({ length: c }, (_, j) => `<text x="${xs[i]}" y="${base - 8 - j * 15}" class="lp-x">✕</text>`))
+    .join('');
+  const tickMarks = ticks
+    .map((t, i) => `<line x1="${xs[i]}" y1="${base - 5}" x2="${xs[i]}" y2="${base + 5}" class="lp-tick"/><text x="${xs[i]}" y="${base + 19}" class="lp-label">${t}</text>`)
+    .join('');
+  return `<div class="graph lplot"><div class="graph-title">${title}</div>
+    <svg viewBox="0 0 ${w} ${h}" style="--w:${w}" aria-hidden="true"><line x1="6" y1="${base}" x2="${w - 6}" y2="${base}" class="lp-line"/>${tickMarks}${marks}</svg></div>`;
+}
+
+const PLOTS = {
+  1: { title: 'Pencil lengths (inches)', thing: 'pencil', things: 'pencils', ticks: ['3', '4', '5', '6', '7', '8'], max: 5 },
+  2: { title: 'Bug lengths (inches)', thing: 'bug', things: 'bugs', ticks: ['1/4', '1/2', '3/4', '1', '1 1/4'], max: 5 },
+  3: { title: 'Ribbon pieces (inches)', thing: 'ribbon piece', things: 'ribbon pieces', ticks: ['1/8', '2/8', '3/8', '4/8', '5/8', '6/8', '7/8'], max: 4 },
+};
+
+function linePlots(level) {
+  const { title, thing, things, ticks, max } = PLOTS[level];
+  let counts;
+  do counts = ticks.map(() => rand(0, max));
+  while (counts.filter(Boolean).length < 3 || Math.max(...counts) < 2);
+  const n = ticks.length;
+  const total = counts.reduce((a, b) => a + b, 0);
+  const unit = level === 1 ? 'inches' : 'inch';
+  const base = {
+    visual: linePlotPic(title, ticks, counts),
+    summary: `${title}: ${ticks.map((t, i) => `${t}: ${counts[i]}`).join(', ')}`,
+    word: true,
+  };
+  const used = counts.map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+  const xs = (i) => `${counts[i]} X${counts[i] === 1 ? '' : "'s"}`;
+
+  if (level === 3 && Math.random() < 0.8) {
+    const eighth = (i) => i + 1; // tick i is (i + 1)/8
+    if (Math.random() < 0.5) {
+      const [lo, hi] = [used[0], used[used.length - 1]];
+      const answer = `${eighth(hi) - eighth(lo)}/8`;
+      return {
+        ...base,
+        prompt: `What is the difference between the longest and the shortest ${thing}?`,
+        answer,
+        choices: choicesFrom(answer, [`${eighth(hi) + eighth(lo)}/8`, `${eighth(hi) - eighth(lo)}/16`, `${eighth(hi) - eighth(lo) + 1}/8`]),
+        hint: 'Find the X farthest right and the X farthest left. Subtract the smaller from the bigger.',
+        steps: [
+          `The longest ${thing} is the X farthest to the right: ${ticks[hi]} inch.`,
+          `The shortest is the X farthest to the left: ${ticks[lo]} inch.`,
+          `Subtract the tops and keep the 8: ${eighth(hi)} − ${eighth(lo)} = ? Write it over 8.`,
+        ],
+        why: why(`Longest ${ticks[hi]}, shortest ${ticks[lo]}. ${ticks[hi]} − ${ticks[lo]} = ${answer}.`, [
+          `Add them: ${ticks[hi]} + ${ticks[lo]} = ${eighth(hi) + eighth(lo)}/8.`,
+          'Subtract the tops and the bottoms too.',
+        ]),
+        mistake: `${eighth(hi) + eighth(lo)}/8`,
+      };
+    }
+    const i = pick(used.filter((j) => counts[j] >= 2));
+    const c = counts[i];
+    const answer = `${c * eighth(i)}/8`;
+    return {
+      ...base,
+      prompt: `All the ${ticks[i]} inch ${things} are laid end to end. How long is that in all?`,
+      answer,
+      choices: choicesFrom(answer, [`${eighth(i)}/8`, `${c * eighth(i)}/${8 * c}`, `${c + eighth(i)}/8`, `${(c + 1) * eighth(i)}/8`]),
+      hint: `Count the ${ticks[i]} X's. Add ${ticks[i]} that many times.`,
+      steps: [
+        `Find ${ticks[i]}. Count the X's above it: ${c}.`,
+        `Each one is ${ticks[i]} inch long. Add up ${c} pieces of ${ticks[i]}.`,
+        `${c} × ${eighth(i)} = ? Write it over 8.`,
+      ],
+      why: why(`There are ${c} pieces of ${ticks[i]} inch: ${Array(c).fill(ticks[i]).join(' + ')} = ${answer}.`, [
+        `There are ${c} pieces, but each is ${ticks[i]}, so it's still ${ticks[i]}.`,
+        'Add the tops and the bottoms too.',
+      ]),
+      mistake: `${eighth(i)}/8`,
+    };
+  }
+
+  const kinds = { 1: ['count', 'most', 'total', 'longer'], 2: ['count', 'more', 'total', 'longer'], 3: ['count', 'longer'] }[level];
+  const kind = pick(kinds);
+  if (kind === 'count') {
+    const i = pick(used);
+    const near = counts[i === 0 ? 1 : i - 1];
+    return {
+      ...base,
+      prompt: `How many ${things} are ${ticks[i]} ${unit} long?`,
+      answer: String(counts[i]),
+      hint: `Find ${ticks[i]} on the line and count the X's above it.`,
+      steps: [`Find ${ticks[i]} on the number line.`, `Each X is one ${thing}.`, `Count the X's right above ${ticks[i]}. How many?`],
+      why: why(`There ${counts[i] === 1 ? 'is' : 'are'} ${xs(i)} above ${ticks[i]}, one for each ${thing}.`, [
+        `Count every X on the plot: ${total}.`,
+        `Read the number ${ticks[i]} itself.`,
+      ]),
+      mistake: near !== counts[i] ? near : total,
+    };
+  }
+  if (kind === 'most') {
+    const top = Math.max(...counts);
+    if (counts.filter((c) => c === top).length === 1) {
+      const i = counts.indexOf(top);
+      return {
+        ...base,
+        prompt: `What length did the most ${things} have? (in inches)`,
+        answer: ticks[i],
+        hint: 'Find the tallest stack of X\'s, then read the number under it.',
+        steps: ["Look for the tallest stack of X's.", 'Look straight down from it to the number line.', 'What number is under the tallest stack?'],
+        why: why(`The tallest stack is above ${ticks[i]}, with ${top} X's.`, [`The longest pencil is ${ticks[used[used.length - 1]]} inches, so that's the most.`, `Count the X's in the tallest stack: ${top}.`]),
+        mistake: [top, Number(ticks[used[used.length - 1]]), Number(ticks[i]) + 1].find((x) => x !== Number(ticks[i])),
+      };
+    }
+  }
+  if (kind === 'more') {
+    const pairs = [];
+    for (const a of used) for (const b of used) if (counts[a] > counts[b]) pairs.push([a, b]);
+    if (pairs.length) {
+      const [a, b] = pick(pairs);
+      return {
+        ...base,
+        prompt: `How many more ${things} are ${ticks[a]} inch than ${ticks[b]} inch?`,
+        answer: String(counts[a] - counts[b]),
+        hint: 'Count the X\'s above each number, then subtract.',
+        steps: [`Count the X's above ${ticks[a]}: ${counts[a]}.`, `Count the X's above ${ticks[b]}: ${counts[b]}.`, `"How many more" means subtract: ${counts[a]} − ${counts[b]} = ?`],
+        why: why(`${counts[a]} at ${ticks[a]}, ${counts[b]} at ${ticks[b]}: ${counts[a]} − ${counts[b]} = ${counts[a] - counts[b]}.`, [
+          `Add them: ${counts[a]} + ${counts[b]} = ${counts[a] + counts[b]}.`,
+          `Just count the ${ticks[a]} X's: ${counts[a]}.`,
+        ]),
+        mistake: counts[a] + counts[b],
+      };
+    }
+  }
+  if (kind === 'longer') {
+    const i = rand(1, n - 3);
+    const right = counts.slice(i + 1);
+    const answer = right.reduce((a, b) => a + b, 0);
+    const withIt = answer + counts[i];
+    if (answer > 0 && counts[i] > 0) {
+      return {
+        ...base,
+        prompt: `How many ${things} are longer than ${ticks[i]} ${unit}?`,
+        answer: String(answer),
+        hint: `Only count the X's to the right of ${ticks[i]}. Not the ones on it!`,
+        steps: [`Find ${ticks[i]} on the line.`, `Longer means farther right. Don't count the X's on ${ticks[i]} itself.`, `Add the X's to the right: ${right.join(' + ')} = ?`],
+        why: why(`Longer is to the right of ${ticks[i]}: ${right.join(' + ')} = ${answer}.`, [
+          `Count ${ticks[i]} too: ${withIt}.`,
+          `Count the X's to the left of ${ticks[i]}: ${counts.slice(0, i).reduce((a, b) => a + b, 0)}.`,
+        ]),
+        mistake: withIt,
+      };
+    }
+  }
+  // Total (also the fallback when a question type doesn't fit this data).
+  const shown = counts.filter(Boolean);
+  return {
+    ...base,
+    prompt: `How many ${things} were measured in all?`,
+    answer: String(total),
+    hint: 'Each X is one. Count every X on the plot.',
+    steps: [`Each X is one ${thing}.`, `Count the X's above each number: ${shown.join(', ')}.`, `Add them all: ${shown.join(' + ')} = ?`],
+    why: why(`Each X is one ${thing}: ${shown.join(' + ')} = ${total}.`, [
+      `Count the numbers on the line: ${n}.`,
+      `Count the tallest stack: ${Math.max(...counts)}.`,
+    ]),
+    mistake: Math.max(...counts) !== total ? Math.max(...counts) : n,
+  };
+}
+
 /* ---------------------------- Topics ---------------------------- */
 
 export const RIGHT = '👍 Right';
@@ -1774,6 +2130,8 @@ export const TOPICS = {
     { id: 'place4', name: 'Place Value', emoji: '🏰', desc: 'Big numbers, digit by digit', gen: placeValue4 },
     { id: 'area', name: 'Area & Perimeter', emoji: '📐', desc: 'Inside and around rectangles', gen: areaPerimeter },
     { id: 'measure', name: 'Measurement', emoji: '📏', desc: 'Convert units', gen: measurement },
+    { id: 'angles', name: 'Angles', emoji: '🔺', desc: 'Kinds, protractors & missing angles', gen: angles },
+    { id: 'lineplot', name: 'Line Plots', emoji: '📈', desc: 'Read data with X marks', gen: linePlots },
   ]),
 };
 

@@ -779,3 +779,24 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
   .tile, .review { background: #f4f4f4 !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ----- Angles ----- */
+.angle { width: min(300px, 78vw); overflow: visible; }
+.angle.big { width: min(400px, 88vw); }
+.angle .ray { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.angle .ray.part { stroke: var(--primary); }
+.angle .vertex { fill: var(--ink); }
+.angle .angle-mark { fill: none; stroke: var(--primary); stroke-width: 2.5; }
+.angle .angle-label { font: 800 15px var(--font, inherit); fill: var(--primary); text-anchor: middle; dominant-baseline: middle; }
+.angle .protractor { fill: rgba(108, 92, 231, 0.08); stroke: var(--muted); stroke-width: 1.5; }
+.angle .pt-tick { stroke: var(--muted); stroke-width: 1.2; }
+.angle .pt-out, .angle .pt-in { font-size: 7.5px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; }
+.angle .pt-out { fill: var(--ink); }
+.angle .pt-in { fill: #d9480f; }
+
+/* ----- Line plots ----- */
+.lplot svg { width: min(calc(var(--w) * 1.35px), 90vw); display: block; margin: 0 auto; }
+.lplot .lp-line { stroke: var(--ink); stroke-width: 2.5; }
+.lplot .lp-tick { stroke: var(--ink); stroke-width: 2; }
+.lplot .lp-label { font-size: 12px; font-weight: 800; text-anchor: middle; fill: var(--ink); }
+.lplot .lp-x { font-size: 14px; font-weight: 800; text-anchor: middle; fill: var(--primary); }
