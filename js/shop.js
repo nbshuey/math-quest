@@ -38,3 +38,13 @@ export const CATALOG = {
   hats: { label: 'Hats', items: HATS, slot: 'hat' },
   themes: { label: 'Themes', items: THEMES, slot: 'theme' },
 };
+
+// Buddies grow as kids earn coins with them. `xp` is the coins needed for each stage.
+export const STAGES = [
+  { name: 'Baby', emoji: '🍼', xp: 0 },
+  { name: 'Little', emoji: '🌱', xp: 40 },
+  { name: 'Big', emoji: '🌿', xp: 120 },
+  { name: 'Super', emoji: '✨', xp: 260 },
+  { name: 'Legend', emoji: '🌟', xp: 500 },
+];
+export const stageFor = (xp) => STAGES.reduce((stage, s, i) => (xp >= s.xp ? i : stage), 0);

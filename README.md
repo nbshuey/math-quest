@@ -22,6 +22,7 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
   - **🔊 Read aloud**: every question, hint and explanation has a speaker button, and math is read as words ("3 eighths", "remainder 2"). Can also read every question automatically.
   - **🔤 Easy-reading text**: Lexend font, extra letter and line spacing, left-aligned word problems, a softer background and no floating decorations.
 - **Buddy & shop**: each player has a buddy who cheers them on. Coins buy new buddies (wizard, dragon, unicorn, robot…), hats, and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents.
+- **🌱 Growing buddies**: buddies grow with every coin earned together: 🍼 Baby → 🌱 Little (40) → 🌿 Big (120) → ✨ Super (260, sparkles) → 🌟 Legend (500, golden glow). Each buddy grows on its own, a progress bar on the quest screen shows the next stage, and growing up gets a celebration on the results screen. Spending coins never shrinks a buddy; older saves start the current buddy with credit for rounds already played.
 - **Rewards**: up to 3 stars per quest and level, coins for first-try answers (×1 / ×2 / ×3 by level), streaks 🔥, confetti and sounds
 - **👪 Grown-ups page** (button on the home screen, optional 4-digit PIN):
   - **Focus areas**: tick the topics a kid is struggling with. They show first with a ⭐ badge, pay bonus coins, and come up about 4× as often in Mixed Challenge and Fix the Mistake.
@@ -69,5 +70,4 @@ Add an entry to `BUDDIES`, `HATS` or `THEMES` in `js/shop.js`. A new theme also 
 
 ## Ideas for later
 
-- Buddies that grow or evolve as kids earn stars
 - Picture steps in hints (draw the area model or number line as you go)

@@ -1,5 +1,5 @@
 import { TOPICS, GRADES, LEVELS, speedFact } from './problems.js';
-import { BUDDIES, HATS, THEMES, CATALOG } from './shop.js';
+import { BUDDIES, HATS, THEMES, CATALOG, STAGES, stageFor } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
 import { speak, stopSpeaking, choiceWords, canSpeak } from './speech.js';
@@ -76,9 +76,41 @@ function applyTheme(themeId) {
   ).join('');
 }
 
+/* ---------------------------- Buddy growth ---------------------------- */
+
+const buddyXp = (p, id = p.buddy) => p.buddyXp[id] ?? 0;
+
+// Adds this round's coins to the buddy's growth. Returns the stages before and after.
+function growBuddy(p, coins) {
+  const before = stageFor(buddyXp(p));
+  p.buddyXp[p.buddy] = buddyXp(p) + coins;
+  return { before, after: stageFor(buddyXp(p)) };
+}
+
+// A progress bar toward the buddy's next stage.
+function growLine(p, gained = 0) {
+  const xp = buddyXp(p);
+  const i = stageFor(xp);
+  const [stage, next] = [STAGES[i], STAGES[i + 1]];
+  const pct = next ? ((xp - stage.xp) / (next.xp - stage.xp)) * 100 : 100;
+  const name = esc(buddyName(p));
+  return `<div class="grow">
+    <div class="grow-text"><span>${stage.emoji} ${name} is a <strong>${stage.name}</strong> buddy${gained ? ` <b class="grow-gain">+${gained}</b>` : ''}</span>
+      <small>${next ? `🪙 ${next.xp - xp} more to grow into ${next.emoji} ${next.name}` : 'Fully grown! 🌟'}</small></div>
+    <div class="progress"><div style="width:${pct.toFixed(1)}%"></div></div>
+  </div>`;
+}
+
+// The celebration line when a buddy reaches a new stage.
+function grewLine(p, grown) {
+  if (grown.after <= grown.before) return '';
+  const s = STAGES[grown.after];
+  return `<div class="grew">🎉 ${esc(buddyName(p))} grew into a <strong>${s.emoji} ${s.name}</strong> buddy!</div>`;
+}
+
 function buddyHtml(p, size = '') {
   const hat = HATS.find((h) => h.id === p.hat);
-  return `<div class="buddy ${size}" id="buddy">
+  return `<div class="buddy ${size} stage-${stageFor(buddyXp(p))}" id="buddy">
     <span class="buddy-hat">${hat && hat.id !== 'none' ? hat.emoji : ''}</span>
     <span class="buddy-body">${buddyOf(p).emoji}</span>
   </div>`;
@@ -273,6 +305,7 @@ function renderTopics() {
         ${buddyRow(p, greeting)}
         <button class="btn shop-btn" data-action="shop">🛒 Shop</button>
       </div>
+      ${growLine(p)}
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
       ${goal}
       <div class="topics">${speedCard(p)}${cards}</div>
@@ -318,7 +351,9 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
         : tab === 'hats'
           ? `<div class="shop-emoji hat-preview"><span>${item.id === 'none' ? '' : item.emoji}</span><span>${buddyOf(p).emoji}</span></div>`
           : `<div class="shop-emoji">${item.emoji}</div>`;
-      return `<div class="shop-item ${using ? 'equipped' : ''}">${art}<div class="shop-name">${esc(item.name)}</div>${button}</div>`;
+      const st = tab === 'buddies' && owned ? STAGES[stageFor(buddyXp(p, item.id))] : null;
+      const stage = st ? `<div class="shop-stage">${st.emoji} ${st.name}</div>` : '';
+      return `<div class="shop-item ${using ? 'equipped' : ''}">${art}<div class="shop-name">${esc(item.name)}</div>${stage}${button}</div>`;
     })
     .join('');
 
@@ -330,7 +365,8 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
         ${Object.entries(CATALOG).map(([key, c]) => `<button class="tab ${key === tab ? 'selected' : ''}" data-tab="${key}" role="tab">${c.label}</button>`).join('')}
       </div>
       <div class="shop-grid">${cards}</div>
-      <p class="shop-tip">Earn coins by answering on the first try. Hard quests pay 🪙 ×3!</p>
+      <p class="shop-tip">Earn coins by answering on the first try. Hard quests pay 🪙 ×3!
+        ${tab === 'buddies' ? '<br>Your buddy grows with every coin you earn together: 🍼 Baby → 🌱 Little → 🌿 Big → ✨ Super → 🌟 Legend. Spending coins never shrinks them!' : ''}</p>
     </div>`);
 
   bindSound();
@@ -1160,15 +1196,18 @@ function finishRound() {
   goalBonus(p, bonuses);
   entry.coins = earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += entry.coins;
+  const grown = growBuddy(p, entry.coins);
   save();
 
   sounds.win();
-  if (stars > 0) confetti(120);
+  if (stars > 0 || grown.after > grown.before) confetti(grown.after > grown.before ? 200 : 120);
   const message = ["Keep practicing, you're getting stronger!", 'Good job!', 'Great work!', 'PERFECT QUEST! 🏆'][stars];
   const nextLevel = !auto && stars === 3 && level < 3 ? LEVELS[level] : null;
   const moved = auto && session.level !== startLevel;
   const cheapest = [...BUDDIES, ...HATS, ...THEMES].filter((i) => i.price > p.coins).sort((a, b) => a.price - b.price)[0];
-  const buddyLine = nextLevel
+  const buddyLine = grown.after > grown.before
+    ? `Look, I grew! Thank you for practicing with me! 🎉`
+    : nextLevel
     ? `Wow! Ready to try ${nextLevel.emoji} ${nextLevel.name}?`
     : moved && session.level > startLevel
       ? `You leveled up to ${levelById(session.level).emoji} ${levelById(session.level).name}! 🧭`
@@ -1186,9 +1225,11 @@ function finishRound() {
         <p class="result-line">You got <strong>${firstTry} of ${QUESTIONS_PER_ROUND}</strong> on the first try.</p>
         ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
         ${tellAsked ? `<p class="result-line">🗣️ Explained out loud: <strong>${told} of ${tellAsked}</strong> great</p>` : ''}
+        ${grewLine(p, grown)}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${auto ? `<p class="result-line">🧭 Level: ${moved ? `${levelById(startLevel).emoji} ${levelById(startLevel).name} → ` : ''}<strong>${levelById(session.level).emoji} ${levelById(session.level).name}</strong>${moved ? '' : ' (staying here)'}</p>` : ''}
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${growLine(p, entry.coins)}
         ${
           missed.length
             ? `<div class="review"><h3>Let's look at these again</h3>
@@ -1206,6 +1247,7 @@ function finishRound() {
 
   bindBubble();
   say(buddyLine, 'happy');
+  if (grown.after > grown.before) app.querySelector('#buddy').classList.add('growing');
   if (p.autoRead) speak(`${message} You got ${firstTry} of ${QUESTIONS_PER_ROUND} on the first try. ${buddyLine}`);
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="topics"]', renderTopics);
@@ -1455,13 +1497,16 @@ function finishSpeed() {
   goalBonus(p, bonuses);
   p.history[0].coins = score + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += p.history[0].coins;
+  const grown = growBuddy(p, p.history[0].coins);
   save();
 
   sounds.win();
-  if (newBest) confetti(120);
+  if (newBest || grown.after > grown.before) confetti(grown.after > grown.before ? 200 : 120);
   const toPractice = [...new Map(s.missed.map((f) => [f.key, f])).values()];
   const message = newBest ? (oldBest ? 'NEW BEST! 🏅' : 'Your first score! 🏅') : score >= oldBest - 2 ? 'So close to your best!' : 'Nice work!';
-  const buddyLine = newBest ? `${score}! You beat ${oldBest || 'the clock'}!` : `Your best is ${oldBest}. Let's try again!`;
+  const buddyLine = grown.after > grown.before
+    ? 'Look, I grew! Thank you for practicing with me! 🎉'
+    : newBest ? `${score}! You beat ${oldBest || 'the clock'}!` : `Your best is ${oldBest}. Let's try again!`;
 
   show(`
     <div class="screen">
@@ -1473,6 +1518,8 @@ function finishSpeed() {
         ${newLevel !== level ? `<p class="result-line">🧭 Next time: <strong>${levelById(newLevel).emoji} ${levelById(newLevel).name}</strong>${newLevel > level ? ' ⬆️ You were fast!' : ''}</p>` : ''}
         <p class="result-line">🪙 +${score} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${grewLine(p, grown)}
+        ${growLine(p, p.history[0].coins)}
         ${
           toPractice.length
             ? `<div class="review"><h3>Facts to practice</h3>
@@ -1489,6 +1536,7 @@ function finishSpeed() {
 
   bindBubble();
   say(buddyLine, 'happy');
+  if (grown.after > grown.before) app.querySelector('#buddy').classList.add('growing');
   if (p.autoRead) speak(`Time's up! ${score} right answers. ${buddyLine}`);
   on('[data-action="topics"]', renderTopics);
   on('[data-action="again"]', () => startSpeed(seconds));

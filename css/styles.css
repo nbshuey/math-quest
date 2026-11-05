@@ -800,3 +800,28 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .lplot .lp-tick { stroke: var(--ink); stroke-width: 2; }
 .lplot .lp-label { font-size: 12px; font-weight: 800; text-anchor: middle; fill: var(--ink); }
 .lplot .lp-x { font-size: 14px; font-weight: 800; text-anchor: middle; fill: var(--primary); }
+
+/* ----- Growing buddies ----- */
+.buddy { position: relative; }
+.buddy.stage-0 .buddy-body { font-size: 2.5rem; }
+.buddy.stage-1 .buddy-body { font-size: 2.9rem; }
+.buddy.stage-2 .buddy-body { font-size: 3.4rem; }
+.buddy.stage-3 .buddy-body { font-size: 3.7rem; filter: drop-shadow(0 0 6px rgba(108, 92, 231, 0.55)); }
+.buddy.stage-4 .buddy-body { font-size: 4rem; filter: drop-shadow(0 0 8px rgba(255, 176, 32, 0.9)); }
+.buddy.stage-3::after, .buddy.stage-4::after, .buddy.stage-4::before {
+  content: '✨'; position: absolute; font-size: 1.1rem; animation: twinkle 1.8s infinite ease-in-out; pointer-events: none;
+}
+.buddy.stage-3::after, .buddy.stage-4::after { right: -10px; top: 10px; }
+.buddy.stage-4::before { content: '🌟'; left: -12px; bottom: 6px; animation-delay: 0.9s; }
+.buddy.growing { animation: grow-up 1.2s ease-out; }
+@keyframes twinkle { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+@keyframes grow-up { 0% { transform: scale(0.6); } 50% { transform: scale(1.35) rotate(-6deg); } 75% { transform: scale(0.95); } 100% { transform: scale(1); } }
+.grow { background: var(--card); border-radius: 16px; padding: 8px 14px; margin: 4px auto 10px; max-width: 560px; text-align: left; box-shadow: var(--shadow); }
+.results .grow { box-shadow: none; background: var(--soft); margin-top: 12px; }
+.grow-text { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; margin-bottom: 6px; font-size: 0.95rem; }
+.grow-text small { color: var(--muted); font-weight: 700; }
+.grow-gain { color: var(--good-dark); }
+.grow .progress { height: 12px; }
+.grew { font-size: 1.3rem; font-weight: 800; color: #5c4400; background: #fff3bf; border: 3px solid var(--gold); border-radius: 16px; padding: 10px; margin: 10px 0; animation: pop 0.5s; }
+.shop-stage { font-size: 0.85rem; font-weight: 800; color: var(--muted); margin: -2px 0 4px; }
+@media (prefers-reduced-motion: reduce) { .buddy::after, .buddy::before { animation: none !important; } .buddy.growing { animation: none; } }

@@ -38,6 +38,12 @@ function normalizeProfile(p) {
     ...p,
     owned: { buddies: [], hats: [], themes: [], ...p.owned },
   };
+  // Buddy growth (coins earned with each buddy). Older saves start the current
+  // buddy with credit for the rounds already played, so it doesn't shrink.
+  if (!p.buddyXp) {
+    const earned = out.history.reduce((n, h) => n + (h.coins ?? (h.firstTry ?? h.speed ?? 0) * (h.level ?? 1)), 0);
+    out.buddyXp = { [out.buddy]: earned };
+  }
   // Stars used to be stored per topic; they're now per topic and level ("topic:level").
   for (const [key, stars] of Object.entries(out.best)) {
     if (key.includes(':')) continue;
