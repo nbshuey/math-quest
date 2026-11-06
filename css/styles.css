@@ -960,3 +960,8 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 @keyframes boss-hit { 0%, 100% { transform: translateX(0); filter: none; } 25% { transform: translateX(-8px); filter: brightness(2); } 75% { transform: translateX(8px); } }
 @keyframes boss-attack { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5) translateX(10px); } }
 @media (prefers-reduced-motion: reduce) { .boss-big, .boss-emoji { animation: none !important; } }
+
+/* ----- Grade 3 pictures ----- */
+.groups { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.group { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; max-width: 4.4em; gap: 4px; padding: 12px 14px; border: 3px dashed var(--primary); border-radius: 40px; font-size: clamp(1.5rem, 5.5vw, 2rem); line-height: 1.1; }
+.fracline .frac-dot { fill: var(--bad); }

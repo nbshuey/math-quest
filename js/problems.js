@@ -725,7 +725,7 @@ function compareFractions(level) {
     wrong = ['A bigger bottom number means a bigger fraction.', "They have the same bottom, so they're equal."];
     steps = [`The bottoms are the same (${b}), so the pieces are the same size.`, `Compare the tops: ${a} pieces and ${c} pieces.`, `More pieces of the same size is more. ${sign}`];
   } else if (a === c) {
-    right = `Both have ${a} pieces, but cutting into ${Math.min(b, d)} makes bigger pieces than cutting into ${Math.max(b, d)}.`;
+    right = `Both have ${a} piece${a > 1 ? 's' : ''}, but cutting into ${Math.min(b, d)} makes bigger pieces than cutting into ${Math.max(b, d)}.`;
     steps = [`The tops are the same: ${a} piece${a > 1 ? 's' : ''} each.`, `Compare the bottoms: ${b} and ${d}. Cutting into more pieces makes each piece smaller.`, `Which fraction has the bigger pieces? ${sign}`];
   } else if (half(a, b) * half(c, d) < 0) {
     const [more, less] = half(a, b) > 0 ? [A, C] : [C, A];
@@ -2101,6 +2101,334 @@ function linePlots(level) {
   };
 }
 
+/* ---------------------------- Grade 3 ---------------------------- */
+// New question types for 3rd grade, plus grade-3 settings of the 2nd and 4th grade ones.
+
+// Equal groups drawn as circles.
+const groupsPic = (g, n, item) =>
+  `<div class="groups">${Array.from({ length: g }, () => `<span class="group">${item.repeat(n)}</span>`).join('')}</div>`;
+
+function multMeaning(level) {
+  const item = pick(ARRAY_ITEMS);
+  if (level === 1) {
+    let r, c;
+    do [r, c] = [rand(2, 5), rand(2, 5)]; while (r === c);
+    const answer = `${r} × ${c}`;
+    return {
+      prompt: 'Which multiplication matches the picture?',
+      visual: arrayPic(r, c, item),
+      summary: `${r} rows of ${c}`,
+      spoken: '',
+      answer,
+      choices: shuffle([answer, `${r} + ${c}`, `${r} × ${c + 1}`]),
+      hint: 'Multiplication means equal groups. How many rows? How many in each row?',
+      steps: ['Count the rows.', 'Count how many are in one row.', 'Rows × how many in each row. Which one matches?'],
+      why: why(`${r} rows with ${c} in each row is ${r} groups of ${c}: ${r} × ${c}.`, [
+        `Add the rows and the number in a row: ${r} + ${c}.`,
+        `There are ${c + 1} in each row.`,
+      ]),
+      mistake: `${r} + ${c}`,
+    };
+  }
+  const g = rand(2, level === 2 ? 5 : 9);
+  const n = rand(3, level === 2 ? 6 : 9);
+  const reasoning = why(`${g} groups of ${n} is ${g} × ${n} = ${g * n}.`, [`Add them: ${g} + ${n} = ${g + n}.`, `Count one group: ${n}.`]);
+  if (level === 2) {
+    return {
+      prompt: `How many ${item} in all?`,
+      visual: groupsPic(g, n, item),
+      summary: `${g} groups of ${n}`,
+      spoken: '',
+      answer: String(g * n),
+      hint: 'Count the groups, then how many are in each group. Then multiply.',
+      steps: [`Count the groups: ${g}.`, `Count how many are in one group: ${n}.`, withPic(`${g} groups of ${n}: ${g} × ${n} = ?`, hopsPic(0, n, g))],
+      why: reasoning,
+      mistake: g + n,
+    };
+  }
+  const [what, many, each] = pick([['boxes', 'crayons', 'box'], ['bags', 'apples', 'bag'], ['rows', 'chairs', 'row'], ['teams', 'players', 'team']]);
+  return {
+    prompt: `${pick(NAMES)} has ${g} ${what}. Each ${each} has ${n} ${many}. How many ${many} in all?`,
+    answer: String(g * n),
+    hint: '“Each” means every group has the same number. That is multiplication!',
+    steps: [`Every ${each} has the same number, so these are equal groups.`, `${g} groups of ${n}: ${g} × ${n}.`, `${g} × ${n} = ?`],
+    why: reasoning,
+    mistake: g + n,
+    word: true,
+  };
+}
+
+function multFacts3(level) {
+  if (level < 3) return multFacts(level);
+  const a = rand(2, 10);
+  const b = rand(2, 10);
+  const p = a * b;
+  return {
+    prompt: `${a} × ? = ${p}`,
+    answer: String(b),
+    hint: `How many ${a}s make ${p}? Skip count by ${a}s.`,
+    steps: [`Think: how many ${a}s make ${p}?`, `Skip count by ${a}s: ${multiples(a, Math.min(3, b - 1))}…`, `Keep going until you reach ${p}. How many jumps?`],
+    why: why(`${a} × ${b} = ${p}, so the missing number is ${b}.`, [`Subtract: ${p} − ${a} = ${p - a}.`, `${a} × ${b + 1} = ${a * (b + 1)}, so it's ${b + 1}.`]),
+    mistake: p - a !== b ? p - a : b + 1,
+  };
+}
+
+function division3(level) {
+  if (level === 2) return division(1);
+  const item = pick(['cookies', 'stickers', 'marbles', 'crayons']);
+  const emoji = { cookies: '🍪', stickers: '⭐', marbles: '🔵', crayons: '🖍️' }[item];
+  if (level === 1) {
+    let k, q;
+    do [k, q] = [rand(2, 5), rand(2, 6)]; while (k === q || k * q - k === q);
+    const total = k * q;
+    return {
+      prompt: `${total} ${item} are shared equally by ${k} friends. How many does each friend get?`,
+      visual: `<div class="array" style="--c:${Math.min(total, 10)}">${`<span>${emoji}</span>`.repeat(total)}</div>`,
+      summary: `${total} ${item} shared by ${k}`,
+      answer: String(q),
+      hint: `Make ${k} piles and deal them out one at a time.`,
+      steps: [`Make one pile for each friend: ${k} piles.`, 'Give one to each pile, then again, until they are all given out.', withPic('How many are in each pile?', dotRows(k, q))],
+      why: why(`${k} groups of ${q} make ${total}, so each friend gets ${q}.`, [`Take away the friends: ${total} − ${k} = ${total - k}.`, `Each friend gets ${k}, one for each friend.`]),
+      mistake: total - k,
+      word: true,
+    };
+  }
+  let k, q;
+  do [k, q] = [rand(2, 9), rand(3, 10)]; while (k * q - k === q);
+  const p = k * q;
+  const share = Math.random() < 0.5;
+  const prompt = share
+    ? `${p} students make ${k} equal teams. How many students are on each team?`
+    : `${pick(NAMES)} has ${p} stickers. Each page holds ${k} stickers. How many pages can be filled?`;
+  return {
+    prompt,
+    answer: String(q),
+    hint: `This is division: ${p} ÷ ${k}. Think ${k} × ? = ${p}.`,
+    steps: [`Write it as division: ${p} ÷ ${k}.`, `Think multiplication: ${k} × ? = ${p}.`, `Skip count by ${k}s until you reach ${p}. How many jumps?`],
+    why: why(`${k} × ${q} = ${p}, so ${p} ÷ ${k} = ${q}.`, [`Multiply: ${p} × ${k} = ${p * k}.`, `Subtract: ${p} − ${k} = ${p - k}.`]),
+    mistake: p - k,
+    word: true,
+  };
+}
+
+function multTens(level) {
+  const a = rand(2, level === 1 ? 5 : 9);
+  const b = (level === 1 ? rand(1, 5) : rand(2, 9)) * 10;
+  const tens = b / 10;
+  const steps = [`${b} is ${tens} tens.`, `${a} × ${tens} tens = ${a * tens} tens.`, `${a * tens} tens is how many? Put a 0 on the end.`];
+  const base = {
+    answer: String(a * b),
+    hint: `${b} is ${tens} tens. Multiply ${a} × ${tens}, then put a 0 on the end.`,
+    steps,
+    why: why(`${a} × ${tens} = ${a * tens}, so ${a} × ${b} is ${a * tens} tens: ${a * b}.`, [
+      `Just multiply the digits: ${a} × ${tens} = ${a * tens}.`,
+      `Add instead: ${a} + ${b} = ${a + b}.`,
+    ]),
+    mistake: a * tens,
+  };
+  if (level === 3) {
+    const [thing, unit] = pick([['stickers', 'pack'], ['crayons', 'box'], ['pages', 'book'], ['beads', 'bag']]);
+    return { ...base, prompt: `Each ${unit} has ${b} ${thing}. How many ${thing} are in ${a} ${unit}s?`, steps: [`${a} groups of ${b}: ${a} × ${b}.`, ...steps], word: true };
+  }
+  return { ...base, prompt: `${a} × ${b} = ?` };
+}
+
+function addSub3(level) {
+  if (level === 3) return addSubBig(1);
+  const gen = Math.random() < 0.5 ? addition : subtraction;
+  return gen(level === 1 ? 2 : 3);
+}
+
+// Two-step word problems: do one step, then use that answer for the next.
+function twoStep(level) {
+  const name = pick(NAMES);
+  let first, second, answer, prompt, firstText, sumAll;
+  if (level === 1) {
+    const a = rand(10, 40);
+    const b = rand(5, 20);
+    const c = rand(3, a + b - 2);
+    first = a + b;
+    answer = first - c;
+    sumAll = a + b + c;
+    prompt = `${name} had ${a} stickers, got ${b} more, and then gave away ${c}. How many stickers now?`;
+    firstText = `${a} + ${b}`;
+    second = `${first} − ${c}`;
+  } else if (level === 2) {
+    const g = rand(2, 6);
+    const n = rand(3, 9);
+    const a = rand(5, 20);
+    first = g * n;
+    answer = first + a;
+    sumAll = g + n + a;
+    prompt = `${name} buys ${g} packs with ${n} cards in each pack. ${name} already had ${a} cards. How many cards now?`;
+    firstText = `${g} × ${n}`;
+    second = `${first} + ${a}`;
+  } else {
+    const k = rand(2, 6);
+    const q = rand(3, 9);
+    const c = rand(2, 12);
+    const total = k * q + c;
+    first = total - c;
+    answer = q;
+    sumAll = total + c + k;
+    prompt = `${name} has ${total} marbles. ${name} keeps ${c} and shares the rest equally with ${k} friends. How many marbles does each friend get?`;
+    firstText = `${total} − ${c}`;
+    second = `${first} ÷ ${k}`;
+  }
+  return {
+    prompt,
+    answer: String(answer),
+    hint: 'Find what happens first. Use that answer for the second step.',
+    steps: ['There are two steps. What happens first?', `Step 1: ${firstText} = ${first}.`, `Step 2: ${second} = ?`],
+    why: why(`First ${firstText} = ${first}. Then ${second} = ${answer}.`, [
+      `Stop after the first step: ${first}.`,
+      sumAll !== answer ? `Add every number in the story: ${sumAll}.` : 'Subtract every number in the story.',
+    ]),
+    mistake: first !== answer ? first : sumAll,
+    word: true,
+  };
+}
+
+function rounding3(level) {
+  if (level === 2) return rounding(1);
+  if (level === 1) {
+    let n;
+    do n = rand(11, 99); while (n % 10 === 0);
+    const low = n - (n % 10);
+    const high = low + 10;
+    const answer = n % 10 >= 5 ? high : low;
+    const other = answer === high ? low : high;
+    return {
+      prompt: `Round ${n} to the nearest ten.`,
+      answer: String(answer),
+      hint: `Look at the ones digit: ${n % 10}. 5 or more rounds up. 4 or less rounds down.`,
+      steps: [withPic(`${n} is between ${low} and ${high}.`, numberLine(low, high, n)), `Look at the ones digit: ${n % 10}.`, `5 or more rounds up to ${high}. 4 or less rounds down to ${low}. Which one?`],
+      why: why(n % 10 === 5 ? `${n} is exactly halfway, and halfway rounds up to ${high}.` : `${n} is closer to ${answer} than to ${other}.`, [
+        `The ones digit is ${n % 10}, so round ${answer === high ? 'down' : 'up'}.`,
+        `Always round ${answer === high ? 'down' : 'up'}.`,
+      ], numberLine(low, high, n)),
+      mistake: other,
+    };
+  }
+  // Hard: estimate a sum by rounding to hundreds.
+  const r100 = (x) => Math.round(x / 100) * 100;
+  const r10 = (x) => Math.round(x / 10) * 10;
+  let a, b;
+  do [a, b] = [rand(110, 690), rand(110, 290)]; while (a === b || a % 100 === 0 || b % 100 === 0 || a % 100 === 50 || b % 100 === 50 || r10(a) + r10(b) === r100(a) + r100(b) || a + b === r100(a) + r100(b));
+  const answer = r100(a) + r100(b);
+  return {
+    prompt: `About how much is ${a} + ${b}? Round each number to the nearest hundred first.`,
+    answer: String(answer),
+    choices: choicesFrom(String(answer), [a + b, answer + 100, answer - 100]),
+    hint: 'Round each number to the nearest hundred, then add the round numbers.',
+    steps: [`${a} rounds to ${r100(a)}.`, `${b} rounds to ${r100(b)}.`, `${r100(a)} + ${r100(b)} = ?`],
+    why: why(`${a} is about ${r100(a)} and ${b} is about ${r100(b)}, so about ${r100(a)} + ${r100(b)} = ${answer}.`, [
+      `Add them exactly: ${a + b}.`,
+      `Round to the nearest ten instead: ${r10(a)} + ${r10(b)} = ${r10(a) + r10(b)}.`,
+    ]),
+    mistake: a + b,
+    word: true,
+  };
+}
+
+// A number line from 0 to 1 cut into d equal spaces, with a dot at n/d.
+function fracLine(n, d) {
+  const w = 300;
+  const x = (i) => 20 + (i * (w - 40)) / d;
+  const ticks = Array.from({ length: d + 1 }, (_, i) => `<line x1="${x(i)}" y1="26" x2="${x(i)}" y2="42" class="hop-tick"/>`).join('');
+  return `<svg class="hops fracline" viewBox="0 0 ${w} 64" style="--w:${w}" aria-hidden="true">
+    <line x1="10" y1="34" x2="${w - 10}" y2="34" class="hop-line"/>${ticks}
+    <text x="${x(0)}" y="60" class="hop-num">0</text><text x="${x(d)}" y="60" class="hop-num">1</text>
+    <circle cx="${x(n)}" cy="34" r="7" class="frac-dot"/></svg>`;
+}
+
+function fractions3(level) {
+  if (level === 3) return Math.random() < 0.5 ? compareFractions(1) : equivFractions(1);
+  const d = pick(level === 1 ? [2, 3, 4, 6, 8] : [3, 4, 5, 6, 8]);
+  const n = rand(1, d - 1);
+  const answer = `${n}/${d}`;
+  if (level === 1) {
+    return {
+      prompt: 'What fraction of the bar is shaded?',
+      visual: `<div class="bars">${bar(n, d)}</div>`,
+      summary: `A bar with ${n} of ${d} parts shaded`,
+      spoken: '',
+      answer,
+      choices: choicesFrom(answer, [`${d - n}/${d}`, `${d}/${n}`, `${n}/${d + 1}`]),
+      hint: 'The bottom number is how many equal parts in all. The top number is how many are shaded.',
+      steps: ['Count all the equal parts. That is the bottom number.', 'Count the shaded parts. That is the top number.', 'Shaded over all parts. Which fraction is it?'],
+      why: why(`${n} of the ${d} equal parts are shaded: ${n}/${d}.`, [`Count the parts that aren't shaded: ${d - n}/${d}.`, `Put all the parts on top: ${d}/${n}.`]),
+      mistake: `${d}/${n}`,
+    };
+  }
+  return {
+    prompt: 'What fraction is at the dot?',
+    visual: fracLine(n, d),
+    summary: `A number line from 0 to 1 in ${d} equal spaces, dot after ${n}`,
+    spoken: '',
+    answer,
+    choices: choicesFrom(answer, [`${n}/${d + 1}`, `${n + 1}/${d}`, `1/${n + 1}`]),
+    hint: 'Count the spaces between 0 and 1, not the tick marks. Then count spaces from 0 to the dot.',
+    steps: ['From 0 to 1, count the equal spaces (not the tick marks). That is the bottom number.', 'Count the spaces from 0 to the dot. That is the top number.', 'Which fraction is it?'],
+    why: why(`From 0 to 1 there are ${d} equal spaces, and the dot is ${n} space${n > 1 ? 's' : ''} from 0: ${n}/${d}.`, [
+      `Count the tick marks instead of the spaces: ${n}/${d + 1}.`,
+      `The dot is one more space along: ${n + 1}/${d}.`,
+    ]),
+    mistake: `${n}/${d + 1}`,
+  };
+}
+
+function time3(level) {
+  if (level === 1) return time(2);
+  if (level === 3) return time(3);
+  const h = rand(1, 12);
+  let m;
+  do m = rand(1, 59); while (m % 5 === 0);
+  const fives = Math.floor(m / 5);
+  const answer = clockTime(h, m);
+  const atFive = clockTime(h, fives * 5);
+  return {
+    prompt: 'What time does the clock show?',
+    visual: clock(h, m),
+    summary: `Clock: ${answer}`,
+    spoken: '',
+    answer,
+    choices: choicesFrom(answer, [atFive, clockTime(h, Math.min(59, fives * 5 + 5)), clockTime(m >= 30 ? nextHour(h) : h === 1 ? 12 : h - 1, m)]),
+    hint: 'Count by 5s to the number just before the long hand, then count the little marks by 1s.',
+    steps: [
+      `The short hand shows the hour. It has passed the ${h}, so the hour is ${h}.`,
+      fives ? `The long hand is just past the ${fives}. Count by 5s to it: ${multiples(5, fives).split(', ').slice(-1)[0]}.` : 'The long hand is just past the 12, so start at 0.',
+      'Now count the little marks by 1s after that. How many minutes in all?',
+    ],
+    why: why(`The hour hand has passed the ${h}. The minute hand is ${fives} fives and ${m % 5} more: ${m} minutes. ${answer}.`, [
+      `Only count by 5s: ${atFive}.`,
+      'The long hand shows the hour.',
+    ]),
+    mistake: atFive,
+  };
+}
+
+function shapes3(level) {
+  if (level === 1) return shapes(2);
+  if (level === 3) return shapes(3);
+  const s = pick(SHAPES);
+  const yes = s.sides === 4;
+  return {
+    prompt: 'Is this shape a quadrilateral?',
+    visual: shapePic(s),
+    summary: `A shape with ${s.sides} sides: quadrilateral?`,
+    spoken: '',
+    answer: yes ? 'Yes' : 'No',
+    choices: ['Yes', 'No'],
+    hint: 'Quad means 4. A quadrilateral has exactly 4 straight sides.',
+    steps: ['Quad means 4. A quadrilateral has exactly 4 straight sides.', 'Count the sides of this shape.', 'Are there exactly 4?'],
+    why: yes
+      ? why(`It has 4 straight sides, so it's a quadrilateral, like every ${s.name}.`, ["It has corners, so it can't be a quadrilateral.", 'Only squares are quadrilaterals.'])
+      : why(`It has ${s.sides} sides, not 4, so it's not a quadrilateral.`, ['Every shape with straight sides is a quadrilateral.', `It has ${s.sides} corners, so it is one.`]),
+    mistake: yes ? 'No' : 'Yes',
+  };
+}
+
 /* ---------------------------- Topics ---------------------------- */
 
 export const RIGHT = '👍 Right';
@@ -2191,6 +2519,21 @@ export const TOPICS = {
     { id: 'graphs', name: 'Graphs', emoji: '📊', desc: 'Picture & bar graphs', gen: graphs },
     { id: 'shapes', name: 'Shapes', emoji: '🔷', desc: 'Sides, corners & parts', gen: shapes },
   ]),
+  3: withExtras([
+    { id: 'mult3', name: 'Multiplication', emoji: '🍎', desc: 'Equal groups & arrays', gen: multMeaning },
+    { id: 'times3', name: 'Times Tables', emoji: '✖️', desc: 'Facts up to 10 × 10', gen: multFacts3 },
+    { id: 'div3', name: 'Division', emoji: '➗', desc: 'Sharing & equal groups', gen: division3 },
+    { id: 'tens3', name: 'Times Tens', emoji: '🔟', desc: 'Like 4 × 30', gen: multTens },
+    { id: 'addsub3', name: 'Add & Subtract', emoji: '🧮', desc: 'Up to 1,000', gen: addSub3 },
+    { id: 'twostep3', name: 'Two-Step Problems', emoji: '🪜', desc: 'Word problems in two steps', gen: twoStep },
+    { id: 'round3', name: 'Rounding', emoji: '🎯', desc: 'Round & estimate', gen: rounding3 },
+    { id: 'frac3', name: 'Fractions', emoji: '🍕', desc: 'Parts & number lines', gen: fractions3 },
+    { id: 'area3', name: 'Area & Perimeter', emoji: '📐', desc: 'Squares inside, sides around', gen: areaPerimeter },
+    { id: 'time3', name: 'Telling Time', emoji: '🕒', desc: 'To the minute & elapsed time', gen: time3 },
+    { id: 'graphs3', name: 'Graphs', emoji: '📊', desc: 'Bar graphs', gen: (level) => graphs(level === 1 ? 2 : 3) },
+    { id: 'lineplot3', name: 'Line Plots', emoji: '📈', desc: 'Read data with X marks', gen: (level) => linePlots(level === 1 ? 1 : 2) },
+    { id: 'shapes3', name: 'Shapes', emoji: '🔷', desc: 'Quadrilaterals & equal parts', gen: shapes3 },
+  ]),
   4: withExtras([
     { id: 'multfacts', name: 'Times Tables', emoji: '✖️', desc: 'Facts up to 12 × 12', gen: multFacts },
     { id: 'multbig', name: 'Big Multiplication', emoji: '🏗️', desc: 'Multi-digit multiplying', gen: multBig },
@@ -2238,8 +2581,10 @@ export function speedFact(grade, level) {
     const a = rand(tens ? 2 : 5, tens ? 10 : 20);
     return fact(a * unit, '−', rand(1, Math.min(a - 1, 9)) * unit);
   }
-  const by = level === 1 ? pick([2, 5, 10]) : rand(2, level === 2 ? 10 : 12);
-  const n = rand(level === 3 ? 2 : 1, level === 3 ? 12 : 10);
+  // Grade 3 stays within 10 × 10; grade 4 Hard goes to 12 × 12.
+  const top = grade === 3 ? 10 : 12;
+  const by = level === 1 ? pick([2, 5, 10]) : rand(2, level === 2 ? 10 : top);
+  const n = rand(level === 3 ? 2 : 1, level === 3 ? top : 10);
   if (level === 3 && Math.random() < 0.3) return fact(by * n, '÷', by);
   return Math.random() < 0.5 ? fact(by, '×', n) : fact(n, '×', by);
 }
