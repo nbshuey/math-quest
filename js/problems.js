@@ -2116,6 +2116,14 @@ function wrongAnswerFor(q) {
 // "Fix the Mistake": the buddy answers a question (right 40% of the time)
 // and the kid decides whether the buddy is right, then explains why.
 // "{buddy}" is replaced with the buddy's name by the app.
+// Fix the Mistake only offers 👍 / 👎, so steps that talk about "choices" are reworded.
+function forMistake(step) {
+  const fix = (t) => t
+    .replace('Check each choice. Which one do you land right on?', 'Which number do you land right on?')
+    .replace(/Which choice (matches|is that)\?/, 'What do you get?');
+  return typeof step === 'string' ? fix(step) : { ...step, text: fix(step.text) };
+}
+
 const prefixStep = (pre, step) => (typeof step === 'string' ? `${pre} ${step}` : { ...step, text: `${pre} ${step.text}` });
 
 function mistakeTopic(topics) {
@@ -2145,7 +2153,7 @@ function mistakeTopic(topics) {
         choices: [RIGHT, WRONG],
         hint: "Solve it yourself first. Then check {buddy}'s answer.",
         steps: base.steps?.length
-          ? [prefixStep('Solve it yourself first.', base.steps[0]), ...base.steps.slice(1), "Now check: does {buddy}'s answer match yours?"]
+          ? [prefixStep('Solve it yourself first.', base.steps[0]), ...base.steps.slice(1).map(forMistake), "Now check: does {buddy}'s answer match yours?"]
           : undefined,
         why: base.why,
         whyAsk: "What's the right thinking?",

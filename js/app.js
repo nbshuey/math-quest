@@ -1,5 +1,5 @@
 import { TOPICS, GRADES, LEVELS, speedFact, stepText } from './problems.js';
-import { BUDDIES, HATS, EXTRAS, THEMES, CATALOG, STAGES, stageFor } from './shop.js';
+import { BUDDIES, HATS, EXTRAS, THEMES, TREATS, CATALOG, STAGES, stageFor } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
 import { speak, stopSpeaking, choiceWords, canSpeak } from './speech.js';
@@ -294,7 +294,7 @@ function renderTopics() {
         <div class="topic-name">${t.name}</div>
         <div class="topic-desc">${t.desc}</div>
         ${p.autoLevel ? `<span class="lvl-tag" title="${levelById(topicLevel(p, t.id)).name}">${levelById(topicLevel(p, t.id)).emoji}</span>` : ''}
-        ${starRow(p.best[`${t.id}:${topicLevel(p, t.id)}`] || 0)}
+        ${starRow(p.autoLevel ? Math.max(0, ...LEVELS.map((l) => p.best[`${t.id}:${l.id}`] || 0)) : p.best[`${t.id}:${p.level}`] || 0)}
       </button>`,
     )
     .join('');
@@ -308,7 +308,17 @@ function renderTopics() {
     ? `<div class="goal"><span>🎯 This week: <strong>${Math.min(done, p.weeklyGoal)} of ${p.weeklyGoal}</strong> quests${done >= p.weeklyGoal ? ' ✅' : ''}</span>
         <div class="progress"><div style="width:${Math.min(100, (done / p.weeklyGoal) * 100)}%"></div></div></div>`
     : '';
-  const greeting = p.message ? `Hi ${p.name}! A note from your grown-up: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
+  // Focus areas a grown-up added since the buddy last mentioned them.
+  p.focusSeen = (p.focusSeen ?? []).filter((id) => p.focus.includes(id));
+  const newFocus = p.focus.filter((id) => !p.focusSeen.includes(id)).map(findTopic).filter(Boolean);
+  const listNames = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]);
+  const greeting = newFocus.length
+    ? `Your grown-up thinks we should practice ${listNames(newFocus.map((t) => `${t.emoji} ${t.name}`))} together! Let's be a team. 🤝 Look for the ⭐ Focus ${newFocus.length > 1 ? 'cards' : 'card'}.`
+    : p.message ? `Hi ${p.name}! A note from your grown-up: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
+  if (newFocus.length) {
+    p.focusSeen.push(...newFocus.map((t) => t.id));
+    save();
+  }
 
   show(`
     <div class="screen">
@@ -348,11 +358,20 @@ function renderTopics() {
     if (p.autoLevel) say('Auto it is! I\'ll make it harder when you\'re on a roll, and easier when it gets tricky. 🧭', 'happy');
   });
   on('[data-topic]', (el) => startRound(el.dataset.topic));
+  if (newFocus.length) {
+    say(greeting, 'happy');
+    if (p.autoRead) speak(greeting);
+  }
 }
 
 /* ---------------------------- Shop ---------------------------- */
 
+const shopTabs = (tab) => `<div class="tabs" role="tablist">
+  ${[...Object.entries(CATALOG), ['treats', { label: 'Treats' }]].map(([key, c]) => `<button class="tab ${key === tab ? 'selected' : ''}" data-tab="${key}" role="tab">${c.label}</button>`).join('')}
+</div>`;
+
 function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should we get?') {
+  if (tab === 'treats') return renderTreats(message);
   const p = currentProfile();
   applyLook(p);
   const { items, slot } = CATALOG[tab];
@@ -387,9 +406,7 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
     <div class="screen">
       ${playerBar(p)}
       <div class="topics-head">${buddyRow(p, message)}</div>
-      <div class="tabs" role="tablist">
-        ${Object.entries(CATALOG).map(([key, c]) => `<button class="tab ${key === tab ? 'selected' : ''}" data-tab="${key}" role="tab">${c.label}</button>`).join('')}
-      </div>
+      ${shopTabs(tab)}
       <div class="shop-grid">${cards}</div>
       <p class="shop-tip">Earn coins by answering on the first try. Hard quests pay 🪙 ×3!
         ${tab === 'extras' ? '<br>Extras are things your buddy holds. Every buddy can use them.' : ''}
@@ -432,6 +449,78 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
     renderShop(tab, line);
     say(line, 'happy');
   });
+}
+
+// Treats: buy one and the buddy eats it right away and does a happy move.
+function renderTreats(message = 'Snack time? I love treats! 😋') {
+  const p = currentProfile();
+  applyLook(p);
+  const cards = TREATS.map((t) => `
+    <div class="shop-item"><div class="shop-emoji">${t.emoji}</div><div class="shop-name">${esc(t.name)}</div>
+      ${p.coins >= t.price ? `<button class="buy-btn" data-treat="${t.id}">🪙 ${t.price}</button>` : `<button class="buy-btn locked" disabled>🔒 🪙 ${t.price}</button>`}
+    </div>`).join('');
+  show(`
+    <div class="screen">
+      ${playerBar(p)}
+      <div class="topics-head">${buddyRow(p, message)}</div>
+      ${shopTabs('treats')}
+      <div class="shop-grid">${cards}</div>
+      <p class="shop-tip">Treats are a fun way to say thanks to your buddy. ${p.treatsFed ? `You've shared ${p.treatsFed} treat${p.treatsFed > 1 ? 's' : ''}!` : ''} Treats don't make your buddy grow, but earning coins does!</p>
+    </div>`);
+  bindSound();
+  bindBubble();
+  on('[data-action="back"]', renderTopics);
+  on('[data-tab]', (el) => renderShop(el.dataset.tab));
+  on('[data-treat]', (el) => {
+    const t = TREATS.find((x) => x.id === el.dataset.treat);
+    // Two taps, like buying anything else.
+    if (!el.classList.contains('confirm')) {
+      el.classList.add('confirm');
+      el.textContent = 'Tap to share!';
+      setTimeout(() => {
+        if (!el.isConnected) return;
+        el.classList.remove('confirm');
+        el.textContent = `🪙 ${t.price}`;
+      }, 3000);
+      return;
+    }
+    p.coins -= t.price;
+    p.treatsFed = (p.treatsFed ?? 0) + 1;
+    const stickers = checkStickers(p, { kind: 'shop' });
+    save();
+    const line = stickers.length ? `${t.line} And a new sticker: ${stickers.map((st) => `${st.emoji} ${st.name}`).join(', ')}!` : t.line;
+    renderTreats(line);
+    feedBuddy(t);
+    say(line);
+    if (p.autoRead) speak(line);
+  });
+}
+
+// The treat flies to the buddy, then the buddy does its move with hearts.
+function feedBuddy(t) {
+  const buddy = app.querySelector('#buddy');
+  if (!buddy) return;
+  const food = document.createElement('span');
+  food.className = 'treat-fly';
+  food.textContent = t.emoji;
+  buddy.append(food);
+  sounds.correct();
+  setTimeout(() => {
+    food.remove();
+    buddy.classList.remove('happy', 'sad');
+    buddy.classList.add(`treat-${t.move}`);
+    for (let i = 0; i < 5; i++) {
+      const heart = document.createElement('span');
+      heart.className = 'treat-heart';
+      heart.textContent = pick(['❤️', '💖', '✨', '💛']);
+      heart.style.setProperty('--dx', `${(i - 2) * 18}px`);
+      heart.style.animationDelay = `${i * 0.08}s`;
+      buddy.append(heart);
+      setTimeout(() => heart.remove(), 1400);
+    }
+    if (t.move === 'party') confetti(80);
+    setTimeout(() => buddy.classList.remove(`treat-${t.move}`), 1300);
+  }, 550);
 }
 
 /* --------------------------- Grown-ups --------------------------- */
@@ -534,7 +623,7 @@ function renderParents(childId = state.currentId) {
 
       <div class="panel">
         <h2>⭐ Focus areas</h2>
-        <p class="panel-note">Tick what ${esc(first)} is working on. Focus quests show first on ${esc(first)}'s screen, pay ${FOCUS_BONUS} bonus coins, and come up more often in Mixed Challenge and Fix the Mistake.
+        <p class="panel-note">Tick what ${esc(first)} is working on. Focus quests show first on ${esc(first)}'s screen, pay ${FOCUS_BONUS} bonus coins, and come up more often in Mixed Challenge, Fix the Mistake and the daily warm-up. ${esc(buddyName(p))} tells ${esc(first)} about new ones as a team goal.
           🔎 marks topics where ${esc(first)} gets less than 70% right the first time.</p>
         <div class="toggle-list">${topicRows}</div>
       </div>
@@ -636,6 +725,12 @@ function renderParents(childId = state.currentId) {
     p[el.dataset.toggle] = !p[el.dataset.toggle];
     el.classList.toggle('selected', p[el.dataset.toggle]);
     save();
+    // The Difficulty note and the per-topic levels depend on Auto.
+    if (el.dataset.toggle === 'autoLevel') {
+      const y = window.scrollY;
+      renderParents(p.id);
+      window.scrollTo(0, y);
+    }
   });
   on('[data-goal]', (el) => {
     p.weeklyGoal = Number(el.dataset.goal);
@@ -1465,6 +1560,7 @@ const STICKERS = [
   { id: 'traveler', emoji: '🌍', name: 'World traveler', how: 'Play every topic in your grade.', test: (p) => topicsPlayed(p) >= coreTopics(p.grade).length },
   { id: 'growing', emoji: '🌿', name: 'Growing up', how: 'Grow a buddy to 🌿 Big.', test: (p) => maxStage(p) >= 2 },
   { id: 'legend', emoji: '👑', name: 'Legend keeper', how: 'Grow a buddy to 🌟 Legend.', test: (p) => maxStage(p) >= 4 },
+  { id: 'snack', emoji: '🍎', name: 'Snack time', how: 'Share a treat with your buddy.', test: (p) => (p.treatsFed ?? 0) >= 1 },
   { id: 'shopper', emoji: '🛍️', name: 'First buy', how: 'Buy something in the shop.', test: (p) => ownedCount(p) >= 1 },
   { id: 'collector', emoji: '🎒', name: 'Collector', how: 'Own 10 things from the shop.', test: (p) => ownedCount(p) >= 10 },
 ];

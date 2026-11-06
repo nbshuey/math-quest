@@ -93,3 +93,14 @@ export const STAGES = [
   { name: 'Legend', emoji: '🌟', xp: 500 },
 ];
 export const stageFor = (xp) => STAGES.reduce((stage, s, i) => (xp >= s.xp ? i : stage), 0);
+
+// Treats are eaten right away: the buddy does a happy move. They don't change growth.
+export const TREATS = [
+  { id: 'apple', name: 'Apple', emoji: '🍎', price: 5, move: 'hop', line: 'Crunch crunch! Yum!' },
+  { id: 'carrot', name: 'Carrot', emoji: '🥕', price: 5, move: 'wiggle', line: 'Munch munch! Good for my eyes!' },
+  { id: 'cookie', name: 'Cookie', emoji: '🍪', price: 8, move: 'wiggle', line: 'Cookie dance! Wiggle wiggle!' },
+  { id: 'donut', name: 'Donut', emoji: '🍩', price: 10, move: 'spin', line: 'Sprinkles! Wheee!' },
+  { id: 'icecream', name: 'Ice cream', emoji: '🍨', price: 12, move: 'spin', line: 'Brain freeze! Hee hee!' },
+  { id: 'pizza', name: 'Pizza', emoji: '🍕', price: 15, move: 'dance', line: 'Pizza party dance!' },
+  { id: 'cake', name: 'Cake', emoji: '🎂', price: 20, move: 'party', line: 'A whole cake? For ME?! Best day ever!' },
+];
