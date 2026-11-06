@@ -52,6 +52,36 @@ body[data-theme='space'] {
   --page-bg: radial-gradient(circle at 15% 20%, #3b5bdb55 0, transparent 35%), linear-gradient(180deg, #0b1026, #1b2a5c);
 }
 
+body[data-theme='winter'] {
+  --primary: #1971c2; --primary-dark: #145a9c; --title-shadow: #a5d8ff;
+  --page-bg: radial-gradient(circle at 30% 0%, #ffffff 0, transparent 50%), linear-gradient(180deg, #e7f5ff, #d0ebff);
+}
+body[data-theme='spring'] {
+  --primary: #d6336c; --primary-dark: #a61e4d; --title-shadow: #b2f2bb;
+  --page-bg: radial-gradient(circle at 70% 0%, #fff0f6 0, transparent 50%), linear-gradient(180deg, #ebfbee, #fff9db);
+}
+body[data-theme='summer'] {
+  --primary: #0c8599; --primary-dark: #0b7285; --title-shadow: #ffd43b;
+  --page-bg: radial-gradient(circle at 80% 0%, #fff3bf 0, transparent 45%), linear-gradient(180deg, #c5f6fa, #99e9f2);
+}
+body[data-theme='autumn'] {
+  --primary: #e8590c; --primary-dark: #c2410c; --title-shadow: #ffe066;
+  --page-bg: radial-gradient(circle at 20% 0%, #fff4e6 0, transparent 50%), linear-gradient(180deg, #ffe8cc, #ffc078);
+}
+body[data-theme='spooky'] {
+  --primary: #f76707; --primary-dark: #d9480f; --title: #ffa94d; --title-shadow: #5f3dc4;
+  --on-bg: #fff4e6; --on-bg-muted: #ffc9a0;
+  --page-bg: radial-gradient(circle at 80% 10%, #e8590c55 0, transparent 40%), linear-gradient(180deg, #2b1d3a, #120c1e);
+}
+body[data-theme='party'] {
+  --primary: #ae3ec9; --primary-dark: #862e9c; --title-shadow: #ffd43b;
+  --page-bg: radial-gradient(circle at 20% 0%, #fff3bf 0, transparent 45%), linear-gradient(180deg, #ffdeeb, #e5dbff);
+}
+body[data-theme='family'] {
+  --primary: #2b8a3e; --primary-dark: #237032; --title-shadow: #74c0fc;
+  --page-bg: radial-gradient(circle at 50% 0%, #fff4e6 0, transparent 45%), linear-gradient(180deg, #d3f9d8, #a5d8ff);
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -902,3 +932,31 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 @keyframes treat-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 @keyframes treat-dance { 0%, 100% { transform: translateY(0) rotate(0); } 20% { transform: translateY(-14px) rotate(-10deg); } 40% { transform: translateY(0) rotate(10deg); } 60% { transform: translateY(-14px) rotate(-10deg); } 80% { transform: translateY(0) rotate(10deg); } }
 @media (prefers-reduced-motion: reduce) { .treat-fly, .treat-heart { display: none; } .buddy[class*='treat-'] { animation: none !important; } }
+
+/* ----- Seasonal & birthday ----- */
+.special-tag.season { background: #e7f5ff; color: #1864ab; }
+.birthday-row { display: flex; gap: 8px; }
+.birthday-row select { flex: 1; }
+
+/* ----- Team goal ----- */
+.goal.team small { color: var(--muted); font-weight: 700; margin-left: 6px; }
+.goal.team .progress > div { background: linear-gradient(90deg, #2b8a3e, #74c0fc); }
+
+/* ----- Boss battles ----- */
+.boss-tag { position: absolute; top: -10px; right: -6px; background: #e03131; color: #fff; font-weight: 800; font-size: 0.8rem; border-radius: 99px; padding: 2px 9px; transform: rotate(6deg); animation: pop 0.6s; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15); }
+.boss-intro { text-align: center; }
+.boss-big { font-size: 6rem; line-height: 1.1; animation: boss-bob 1.6s ease-in-out infinite; }
+.boss-big.defeated { filter: grayscale(0.8); transform: rotate(-12deg); animation: none; opacity: 0.6; }
+.boss-bar { display: flex; align-items: center; gap: 10px; background: #2b1d3a; color: #fff; border-radius: 16px; padding: 6px 14px; margin: 0 auto 10px; max-width: 640px; }
+.boss-emoji { font-size: 2.4rem; display: inline-block; }
+.boss-emoji.hit { animation: boss-hit 0.5s; }
+.boss-emoji.attack { animation: boss-attack 0.5s; }
+.boss-emoji.defeated { filter: grayscale(1); transform: rotate(-20deg) scale(0.8); }
+.boss-info { display: flex; flex-direction: column; flex: 1; line-height: 1.2; }
+.boss-hearts { font-size: 1.1rem; letter-spacing: 1px; }
+.boss-shields { font-size: 1.3rem; white-space: nowrap; }
+.boss-shields .lost { filter: grayscale(1); opacity: 0.3; }
+@keyframes boss-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes boss-hit { 0%, 100% { transform: translateX(0); filter: none; } 25% { transform: translateX(-8px); filter: brightness(2); } 75% { transform: translateX(8px); } }
+@keyframes boss-attack { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.5) translateX(10px); } }
+@media (prefers-reduced-motion: reduce) { .boss-big, .boss-emoji { animation: none !important; } }

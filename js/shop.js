@@ -63,6 +63,12 @@ export const EXTRAS = [
   { id: 'skateboard', name: 'Skateboard', emoji: '🛹', price: 75 },
   { id: 'wand', name: 'Magic wand', emoji: '🪄', price: 90 },
   { id: 'rocket', name: 'Rocket', emoji: '🚀', price: 120 },
+  { id: 'snowman', name: 'Snowman', emoji: '⛄', price: 30, months: [12, 1, 2] },
+  { id: 'present', name: 'Present', emoji: '🎁', price: 0, gift: 'birthday' },
+  { id: 'chick', name: 'Baby chick', emoji: '🐣', price: 30, months: [3, 4, 5] },
+  { id: 'watermelon', name: 'Watermelon', emoji: '🍉', price: 30, months: [6, 7, 8] },
+  { id: 'leaf', name: 'Maple leaf', emoji: '🍁', price: 30, months: [9, 10, 11] },
+  { id: 'candy', name: 'Candy', emoji: '🍬', price: 25, months: [10] },
   { id: 'gem', name: 'Giant gem', emoji: '💎', price: 0, needs: 2 },
   { id: 'trophy', name: 'Math trophy', emoji: '🏆', price: 0, needs: 4 },
 ];
@@ -74,6 +80,15 @@ export const THEMES = [
   { id: 'wizard', name: 'Wizard Tower', emoji: '🔮', price: 100, decor: ['✨', '🔮', '🌙', '⭐', '📜', '🪄'], swatch: 'linear-gradient(135deg,#3b2a7a,#1d1442)' },
   { id: 'dragon', name: "Dragon's Lair", emoji: '🌋', price: 120, decor: ['🔥', '🐉', '💎', '🏰', '🌋', '🛡️'], swatch: 'linear-gradient(135deg,#7a1f0f,#3b0d0d)' },
   { id: 'space', name: 'Outer Space', emoji: '🚀', price: 150, decor: ['🪐', '⭐', '🚀', '🌙', '☄️', '👽'], swatch: 'linear-gradient(135deg,#1b2a5c,#0b1026)' },
+  // Seasonal: for sale only in these months (1 = January), kept forever once bought.
+  { id: 'winter', name: 'Winter Wonderland', emoji: '❄️', price: 50, months: [12, 1, 2], decor: ['❄️', '⛄', '🌨️', '🧣', '🎄', '⭐'], swatch: 'linear-gradient(135deg,#e7f5ff,#d0ebff,#ffffff)' },
+  { id: 'spring', name: 'Spring Garden', emoji: '🌷', price: 50, months: [3, 4, 5], decor: ['🌷', '🐣', '🦋', '🌸', '☔', '🌈'], swatch: 'linear-gradient(135deg,#fff0f6,#ebfbee,#fff9db)' },
+  { id: 'summer', name: 'Beach Day', emoji: '🏖️', price: 50, months: [6, 7, 8], decor: ['🏖️', '☀️', '🍉', '🐚', '🌊', '🦀'], swatch: 'linear-gradient(135deg,#fff3bf,#c5f6fa,#99e9f2)' },
+  { id: 'autumn', name: 'Autumn Leaves', emoji: '🍂', price: 50, months: [9, 10, 11], decor: ['🍂', '🍁', '🍎', '🦔', '🌰', '🍄'], swatch: 'linear-gradient(135deg,#fff4e6,#ffd8a8,#ffc078)' },
+  { id: 'spooky', name: 'Spooky Night', emoji: '🎃', price: 60, months: [10], decor: ['🎃', '👻', '🦇', '🕸️', '🍬', '🌙'], swatch: 'linear-gradient(135deg,#2b1d3a,#ff922b)' },
+  // Special: given on the player's birthday, or by the team goal.
+  { id: 'party', name: 'Birthday Party', emoji: '🎂', price: 0, gift: 'birthday', decor: ['🎈', '🎂', '🎁', '🎉', '🧁', '🎊'], swatch: 'linear-gradient(135deg,#ffdeeb,#fff3bf,#d0bfff)' },
+  { id: 'family', name: 'Family Fort', emoji: '🏰', price: 0, gift: 'team', decor: ['🏰', '🤝', '⭐', '🚩', '🛡️', '🌟'], swatch: 'linear-gradient(135deg,#d3f9d8,#a5d8ff,#ffd8a8)' },
 ];
 
 export const CATALOG = {
@@ -82,6 +97,17 @@ export const CATALOG = {
   extras: { label: 'Extras', items: EXTRAS, slot: 'extra' },
   themes: { label: 'Themes', items: THEMES, slot: 'theme' },
 };
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const inSeason = (item, date = new Date()) => !item.months || item.months.includes(date.getMonth() + 1);
+// The next month a seasonal item is for sale, for "Back in October".
+export function nextSeason(item, date = new Date()) {
+  for (let i = 1; i <= 12; i++) {
+    const m = ((date.getMonth() + i) % 12) + 1;
+    if (item.months.includes(m)) return MONTH_NAMES[m - 1];
+  }
+  return '';
+}
 
 // Items with `needs` can't be bought: they unlock for free once any buddy reaches that stage.
 // Buddies grow as kids earn coins with them. `xp` is the coins needed for each stage.

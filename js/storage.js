@@ -24,6 +24,7 @@ function normalizeProfile(p) {
     autoRead: false,
     easyRead: false,
     wordSteps: false, // word problems one sentence at a time
+    birthday: '', // 'M-D', optional: birthday gifts in the shop
     // Set by a grown-up on the Grown-ups page.
     focus: [], // topic ids to practice more
     whyEvery: false, // ask "How do you know?" after every right answer
@@ -38,6 +39,8 @@ function normalizeProfile(p) {
     stats: {},
     history: [],
     stickers: {}, // sticker id → when it was earned
+    bossProgress: {}, // topic id → quests since its last boss win
+    bossWins: {}, // topic id → boss battles won
     ...p,
     owned: { buddies: [], hats: [], extras: [], themes: [], ...p.owned },
   };

@@ -1,5 +1,5 @@
 import { TOPICS, GRADES, LEVELS, speedFact, stepText } from './problems.js';
-import { BUDDIES, HATS, EXTRAS, THEMES, TREATS, CATALOG, STAGES, stageFor } from './shop.js';
+import { BUDDIES, HATS, EXTRAS, THEMES, TREATS, CATALOG, STAGES, stageFor, inSeason, nextSeason } from './shop.js';
 import { loadState, saveState, makeProfile } from './storage.js';
 import { confetti, sounds } from './effects.js';
 import { speak, stopSpeaking, choiceWords, canSpeak } from './speech.js';
@@ -32,7 +32,9 @@ const AUTO_UP = 3; // right on the first try this many times in a row → a leve
 const AUTO_DOWN = 2; // missed the first try this many times in a row → a level down
 // Special items (with `needs`) unlock once any buddy grows to that stage.
 const maxStage = (p) => Math.max(0, ...Object.values(p.buddyXp ?? {}).map(stageFor));
-const owns = (p, tab, item) => (item.needs ? maxStage(p) >= item.needs : item.price === 0) || p.owned[tab].includes(item.id);
+// Gifts can't be bought: birthday gifts are added on the birthday, the team gift after a team goal.
+const owns = (p, tab, item) =>
+  (item.needs ? maxStage(p) >= item.needs : item.gift ? item.gift === 'team' && (state.teamWins ?? 0) > 0 : item.price === 0) || p.owned[tab].includes(item.id);
 const unlocksAt = (stage) => Object.values(CATALOG).flatMap((c) => c.items).filter((i) => i.needs === stage);
 const starRow = (n, max = 3) =>
   `<span class="stars">${Array.from({ length: max }, (_, i) => `<span class="${i < n ? '' : 'off'}">★</span>`).join('')}</span>`;
@@ -223,6 +225,11 @@ function renderEdit(id) {
         <div class="grade-row">
           ${GRADES.map((g) => `<button class="grade-opt ${g === draft.grade ? 'selected' : ''}" data-grade="${g}">Grade ${g}</button>`).join('')}
         </div>
+        <div class="field-label">Birthday (optional, for a surprise)</div>
+        <div class="birthday-row">
+          <select id="bdMonth" class="text-input"><option value="">Month</option>${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => `<option value="${i + 1}" ${Number(draft.birthday?.split('-')[0]) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
+          <select id="bdDay" class="text-input"><option value="">Day</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${Number(draft.birthday?.split('-')[1]) === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>
+        </div>
         <div class="field-label">Reading help</div>
         <div class="toggle-list">
           ${canSpeak ? `<button class="toggle-opt ${draft.autoRead ? 'selected' : ''}" data-toggle="autoRead"><span class="check"></span>🔊 Read questions out loud</button>` : ''}
@@ -258,7 +265,8 @@ function renderEdit(id) {
   });
   on('[data-action="save"]', () => {
     const name = app.querySelector('#name').value.trim() || 'Player';
-    const reading = { autoRead: !!draft.autoRead, easyRead: !!draft.easyRead, wordSteps: !!draft.wordSteps };
+    const [bm, bd] = [app.querySelector('#bdMonth').value, app.querySelector('#bdDay').value];
+    const reading = { autoRead: !!draft.autoRead, easyRead: !!draft.easyRead, wordSteps: !!draft.wordSteps, birthday: bm && bd ? `${bm}-${bd}` : '' };
     if (existing) Object.assign(existing, { name, grade: draft.grade, avatar: draft.avatar, ...reading });
     else state.profiles.push({ ...makeProfile(name, draft.grade, draft.avatar), ...reading });
     save();
@@ -290,6 +298,7 @@ function renderTopics() {
       (t) => `
       <button class="topic-card ${focused(t) ? 'focus' : ''}" data-topic="${t.id}">
         ${focused(t) ? `<span class="focus-tag">⭐ Focus +${FOCUS_BONUS}🪙</span>` : ''}
+        ${bossReady(p, t.id) ? '<span class="boss-tag">👾 Boss!</span>' : ''}
         <div class="topic-emoji">${t.emoji}</div>
         <div class="topic-name">${t.name}</div>
         <div class="topic-desc">${t.desc}</div>
@@ -312,7 +321,17 @@ function renderTopics() {
   p.focusSeen = (p.focusSeen ?? []).filter((id) => p.focus.includes(id));
   const newFocus = p.focus.filter((id) => !p.focusSeen.includes(id)).map(findTopic).filter(Boolean);
   const listNames = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]);
-  const greeting = newFocus.length
+  const birthday = birthdayGift(p);
+  const teamCheer = p.teamCheer === weekStart();
+  if (teamCheer) {
+    delete p.teamCheer;
+    save();
+  }
+  const greeting = birthday
+    ? `Happy birthday, ${p.name}! 🎂 I got you presents: the 🎂 Birthday Party theme and a 🎁 Present to hold. Find them in the shop!`
+    : teamCheer
+    ? `🤝 Your team reached the goal! Everyone got ${TEAM_BONUS} coins${state.teamWins === 1 ? ', and the 🏰 Family Fort theme is in the shop' : ''}. Teamwork!`
+    : newFocus.length
     ? `Your grown-up thinks we should practice ${listNames(newFocus.map((t) => `${t.emoji} ${t.name}`))} together! Let's be a team. 🤝 Look for the ⭐ Focus ${newFocus.length > 1 ? 'cards' : 'card'}.`
     : p.message ? `Hi ${p.name}! A note from your grown-up: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
   if (newFocus.length) {
@@ -333,6 +352,7 @@ function renderTopics() {
       ${growLine(p)}
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
       ${goal}
+      ${teamBar(p)}
       <div class="topics">${warmupCard(p)}${speedCard(p)}${cards}</div>
     </div>`);
 
@@ -357,11 +377,30 @@ function renderTopics() {
     renderTopics();
     if (p.autoLevel) say('Auto it is! I\'ll make it harder when you\'re on a roll, and easier when it gets tricky. 🧭', 'happy');
   });
-  on('[data-topic]', (el) => startRound(el.dataset.topic));
-  if (newFocus.length) {
+  on('[data-topic]', (el) => (bossReady(p, el.dataset.topic) ? renderBossIntro(el.dataset.topic) : startRound(el.dataset.topic)));
+  if (newFocus.length || birthday || teamCheer) {
     say(greeting, 'happy');
     if (p.autoRead) speak(greeting);
   }
+  if (birthday || teamCheer) {
+    sounds.win();
+    confetti(150);
+  }
+}
+
+// On (or within 3 days after) a player's birthday, once a year: free birthday gifts.
+function birthdayGift(p) {
+  if (!p.birthday) return false;
+  const [m, d] = p.birthday.split('-').map(Number);
+  const now = new Date();
+  let bday = new Date(now.getFullYear(), m - 1, d);
+  if (bday > now) bday = new Date(now.getFullYear() - 1, m - 1, d); // e.g. Jan 1 for a Dec 30 birthday
+  const days = (startOfDay(now) - bday.getTime()) / 86400000;
+  if (days < 0 || days > 3 || p.birthdayYear === bday.getFullYear()) return false;
+  p.birthdayYear = bday.getFullYear();
+  for (const [tab, id] of [['themes', 'party'], ['extras', 'present']]) if (!p.owned[tab].includes(id)) p.owned[tab].push(id);
+  save();
+  return true;
 }
 
 /* ---------------------------- Shop ---------------------------- */
@@ -378,7 +417,7 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
 
   // Cheapest first; special unlockable items at the end.
   const cards = [...items]
-    .sort((a, b) => (a.needs ? 1 : 0) - (b.needs ? 1 : 0) || a.price - b.price)
+    .sort((a, b) => (a.needs || a.gift ? 1 : 0) - (b.needs || b.gift ? 1 : 0) || (inSeason(a) ? 0 : 1) - (inSeason(b) ? 0 : 1) || a.price - b.price)
     .map((item) => {
       const owned = owns(p, tab, item);
       const using = p[slot] === item.id;
@@ -386,6 +425,8 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
       if (using) button = '<button class="buy-btn using" disabled>✓ Using</button>';
       else if (owned) button = `<button class="buy-btn owned" data-use="${item.id}">Use</button>`;
       else if (item.needs) button = `<button class="buy-btn locked special" disabled>🔒 Grow a ${STAGES[item.needs].emoji} ${STAGES[item.needs].name} buddy</button>`;
+      else if (item.gift) button = `<button class="buy-btn locked special" disabled>${item.gift === 'team' ? '🤝 Reach a team goal' : '🎂 A birthday present'}</button>`;
+      else if (!inSeason(item)) button = `<button class="buy-btn locked special" disabled>🗓️ Back in ${nextSeason(item)}</button>`;
       else if (p.coins >= item.price) button = `<button class="buy-btn" data-buy="${item.id}">🪙 ${item.price}</button>`;
       else button = `<button class="buy-btn locked" disabled>🔒 🪙 ${item.price}</button>`;
       const art = tab === 'themes'
@@ -397,8 +438,11 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
             : `<div class="shop-emoji">${item.emoji}</div>`;
       const st = tab === 'buddies' && owned ? STAGES[stageFor(buddyXp(p, item.id))] : null;
       const stage = st ? `<div class="shop-stage">${st.emoji} ${st.name}</div>` : '';
-      const badge = item.needs ? `<span class="special-tag">${STAGES[item.needs].emoji} Special</span>` : '';
-      return `<div class="shop-item ${using ? 'equipped' : ''} ${item.needs ? 'special' : ''}">${badge}${art}<div class="shop-name">${esc(item.name)}</div>${stage}${button}</div>`;
+      const badge = item.needs
+        ? `<span class="special-tag">${STAGES[item.needs].emoji} Special</span>`
+        : item.gift ? '<span class="special-tag">🎁 Gift</span>'
+          : item.months && inSeason(item) && !owned ? '<span class="special-tag season">🗓️ This season</span>' : '';
+      return `<div class="shop-item ${using ? 'equipped' : ''} ${item.needs || item.gift ? 'special' : ''}">${badge}${art}<div class="shop-name">${esc(item.name)}</div>${stage}${button}</div>`;
     })
     .join('');
 
@@ -586,6 +630,10 @@ function renderParents(childId = state.currentId) {
     const t = findTopic(h.topic);
     const lvl = LEVELS.find((l) => l.id === h.level);
     const date = new Date(h.t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (h.boss) {
+      return `<div class="review-row"><span>${date} · 👾 Boss: ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
+        <strong>${h.boss === 'won' ? 'Won! 🏆' : 'Escaped'} · ${h.firstTry}/${h.total}</strong></div>`;
+    }
     if (h.topic === 'speed') {
       return `<div class="review-row"><span>${date} · ⚡ Speed Round · ${lvl?.emoji ?? ''}</span>
         <strong>${h.speed} in ${minutes(h.seconds)}${h.wrong ? ` · ✗ ${h.wrong}` : ''}</strong></div>`;
@@ -673,6 +721,12 @@ function renderParents(childId = state.currentId) {
         <div class="grade-row">
           ${GOALS.map((g) => `<button class="grade-opt ${g === p.weeklyGoal ? 'selected' : ''}" data-goal="${g}">${g ? `${g} quests` : 'Off'}</button>`).join('')}
         </div>
+        ${state.profiles.length > 1 ? `
+        <h3>🤝 Team goal (everyone together)</h3>
+        <p class="panel-note">Quests from all players added up. Reaching it pays everyone ${TEAM_BONUS} coins, and the first time unlocks the 🏰 Family Fort theme. It rewards cheering each other on. This week: <strong>${teamCount()}</strong> together.</p>
+        <div class="grade-row">
+          ${TEAM_GOALS.map((g) => `<button class="grade-opt ${g === (state.teamGoal ?? 0) ? 'selected' : ''}" data-team-goal="${g}">${g ? `${g} quests` : 'Off'}</button>`).join('')}
+        </div>` : ''}
       </div>
 
       <div class="panel">
@@ -731,6 +785,11 @@ function renderParents(childId = state.currentId) {
       renderParents(p.id);
       window.scrollTo(0, y);
     }
+  });
+  on('[data-team-goal]', (el) => {
+    state.teamGoal = Number(el.dataset.teamGoal);
+    app.querySelectorAll('[data-team-goal]').forEach((b) => b.classList.toggle('selected', b === el));
+    save();
   });
   on('[data-goal]', (el) => {
     p.weeklyGoal = Number(el.dataset.goal);
@@ -1028,7 +1087,9 @@ function trackLevel(firstTry) {
 
 function nextQuestion() {
   session.index++;
-  if (session.index >= session.total) session.mode === 'warmup' ? finishWarmup() : session.queue ? finishReplay() : finishRound();
+  const b = session.boss;
+  if (b && (b.hp <= 0 || b.shields <= 0 || session.index >= session.total)) finishBoss();
+  else if (session.index >= session.total) session.mode === 'warmup' ? finishWarmup() : session.queue ? finishReplay() : finishRound();
   else loadQuestion();
 }
 
@@ -1117,6 +1178,7 @@ function renderQuestion() {
         <div class="streak" title="Streak">${session.streak >= 2 ? '🔥' : ''}${session.streak}</div>
       </div>
       ${buddyRow(p, greeting)}
+      ${session.boss ? bossBar(session.boss) : ''}
       <div class="question" id="question">
         ${sayButton('question', 'Read the question aloud')}
         <div class="q-count">${session.topic.emoji} ${session.mode === 'warmup' ? 'Warm-up ' : session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
@@ -1242,6 +1304,7 @@ function submit(value, choiceEl) {
     session.locked = true;
     trackLevel(session.attempts === 0);
     if (session.attempts === 0) {
+      if (session.boss) bossHit();
       session.firstTry++;
       session.points += q.level;
       session.streak++;
@@ -1268,6 +1331,7 @@ function submit(value, choiceEl) {
   session.attempts++;
   session.streak = 0;
   sounds.wrong();
+  if (session.boss && session.attempts === 1) bossAttack();
   const card = app.querySelector('#question');
   card.classList.remove('shake');
   void card.offsetWidth; // restart the animation
@@ -1424,6 +1488,34 @@ function showTell(q) {
 
 /* ---------------------------- Results ---------------------------- */
 
+/* Team goal: all players' quests this week added together. Reaching it pays every
+   player once a week, and the first time unlocks the Family Fort theme. */
+const TEAM_BONUS = 15;
+const TEAM_GOALS = [0, 6, 10, 15, 20];
+const teamCount = () => state.profiles.reduce((n, k) => n + questsThisWeek(k), 0);
+const teamOn = () => state.profiles.length > 1 && (state.teamGoal ?? 0) > 0;
+
+function teamBonus(p, bonuses) {
+  if (!teamOn() || state.teamWeek === weekStart() || teamCount() < state.teamGoal) return;
+  state.teamWeek = weekStart();
+  state.teamWins = (state.teamWins ?? 0) + 1;
+  for (const k of state.profiles) {
+    k.teamWins = (k.teamWins ?? 0) + 1;
+    if (k === p) continue;
+    k.coins += TEAM_BONUS;
+    k.teamCheer = weekStart(); // they hear about it next time they open their quests
+  }
+  bonuses.push([`🤝 Team goal reached${state.teamWins === 1 ? ' · 🏰 Family Fort theme unlocked for everyone' : ''}`, TEAM_BONUS]);
+}
+
+function teamBar(p) {
+  if (!teamOn()) return '';
+  const done = teamCount();
+  const who = state.profiles.map((k) => `${k.avatar} ${questsThisWeek(k)}`).join(' · ');
+  return `<div class="goal team"><span>🤝 Team goal: <strong>${Math.min(done, state.teamGoal)} of ${state.teamGoal}</strong> quests together${done >= state.teamGoal ? ' ✅' : ''} <small>${who}</small></span>
+    <div class="progress"><div style="width:${Math.min(100, (done / state.teamGoal) * 100)}%"></div></div></div>`;
+}
+
 // Pays the weekly goal bonus once, the first time the goal is reached each week.
 function goalBonus(p, bonuses) {
   if (p.weeklyGoal && p.goalWeek !== weekStart() && questsThisWeek(p) >= p.weeklyGoal) {
@@ -1450,9 +1542,11 @@ function finishRound() {
   const bonuses = [];
   if (session.focus) bonuses.push(['⭐ Focus quest bonus', FOCUS_BONUS]);
   goalBonus(p, bonuses);
+  teamBonus(p, bonuses);
   entry.coins = earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += entry.coins;
   p.questCount++;
+  if (!topic.extra) p.bossProgress[topic.id] = (p.bossProgress[topic.id] ?? 0) + 1;
   const grown = growBuddy(p, entry.coins);
   const stickers = checkStickers(p, { kind: 'quest', topicId: topic.id, level, firstTry, bestStreak, whyRight, told, levelUp: !!session.leveledUp });
   save();
@@ -1529,7 +1623,9 @@ const quest = (c) => c.kind === 'quest';
 const totalTold = (p) => Object.values(p.stats).reduce((n, s) => n + (s.told || 0), 0);
 const topicsPlayed = (p) => coreTopics(p.grade).filter((t) => p.stats[t.id]?.asked).length;
 const daysThisWeek = (p) => new Set(p.history.filter((h) => h.t >= weekStart()).map((h) => new Date(h.t).getDay())).size;
-const ownedCount = (p) => Object.values(p.owned).reduce((n, list) => n + list.length, 0);
+// Things bought in the shop (gifts don't count).
+const giftIds = new Set(Object.values(CATALOG).flatMap((c) => c.items).filter((i) => i.gift).map((i) => i.id));
+const ownedCount = (p) => Object.values(p.owned).reduce((n, list) => n + list.filter((id) => !giftIds.has(id)).length, 0);
 
 const STICKERS = [
   { id: 'first', emoji: '🎉', name: 'First quest', how: 'Finish a quest.', test: (p, c) => quest(c) },
@@ -1537,6 +1633,8 @@ const STICKERS = [
   { id: 'perfect', emoji: '⭐', name: 'Perfect!', how: 'Get all 10 right on the first try.', test: (p, c) => quest(c) && c.firstTry === 10 },
   { id: 'hard', emoji: '🌶️', name: 'Brave brain', how: 'Finish a 🔥 Hard quest.', test: (p, c) => quest(c) && c.level === 3 },
   { id: 'summit', emoji: '🏔️', name: 'Mountain top', how: 'Get a perfect 🔥 Hard quest.', test: (p, c) => quest(c) && c.level === 3 && c.firstTry === 10 },
+  { id: 'boss', emoji: '👾', name: 'Boss beater', how: 'Win a boss battle.', test: (p, c) => c.kind === 'boss' && c.won },
+  { id: 'boss5', emoji: '🏆', name: 'Boss hunter', how: 'Win 5 boss battles.', test: (p) => Object.values(p.bossWins).reduce((n, w) => n + w, 0) >= 5 },
   { id: 'levelup', emoji: '🧭', name: 'Level up', how: 'Move up a level with 🧭 Auto.', test: (p, c) => c.levelUp },
   { id: 'thinker', emoji: '🧠', name: 'Big thinker', how: 'Pick 3 right explanations in one quest.', test: (p, c) => quest(c) && c.whyRight >= 3 },
   { id: 'teacher', emoji: '🗣️', name: 'Little teacher', how: 'Get a ⭐ Great explaining from your grown-up.', test: (p, c) => quest(c) && c.told >= 1 },
@@ -1555,6 +1653,7 @@ const STICKERS = [
   { id: 'q100', emoji: '💯', name: 'Hundred club', how: 'Finish 100 quests.', test: (p) => p.questCount >= 100 },
   { id: 'days3', emoji: '📅', name: '3-day week', how: 'Practice on 3 different days in one week.', test: (p) => daysThisWeek(p) >= 3 },
   { id: 'days5', emoji: '🗓️', name: '5-day week', how: 'Practice on 5 different days in one week.', test: (p) => daysThisWeek(p) >= 5 },
+  { id: 'team', emoji: '🤝', name: 'Team player', how: 'Reach a team goal with your family.', test: (p) => (p.teamWins ?? 0) >= 1 },
   { id: 'goal', emoji: '🥅', name: 'Goal getter', how: 'Reach your weekly goal.', test: (p) => p.weeklyGoal > 0 && questsThisWeek(p) >= p.weeklyGoal },
   { id: 'explorer', emoji: '🗺️', name: 'Explorer', how: 'Play 5 different topics.', test: (p) => topicsPlayed(p) >= 5 },
   { id: 'traveler', emoji: '🌍', name: 'World traveler', how: 'Play every topic in your grade.', test: (p) => topicsPlayed(p) >= coreTopics(p.grade).length },
@@ -1601,6 +1700,143 @@ function renderStickers() {
   bindSound();
   bindBubble();
   on('[data-action="back"]', renderTopics);
+}
+
+/* ---------------------------- Boss battles ---------------------------- */
+
+// After every 3 quests in a topic, that topic's boss shows up. Each first-try answer
+// takes a heart; each first miss costs one of your 3 shields.
+const BOSS_EVERY = 3;
+const BOSS_HP = 6;
+const BOSS_SHIELDS = 3;
+const BOSS_MAX_QUESTIONS = 12;
+const BOSS_LOOKS = [['👾', 'Math Monster'], ['🐲', 'Digit Dragon'], ['🧌', 'Puzzle Troll'], ['🦑', 'Sum Squid'], ['👻', 'Number Ghost'], ['👹', 'Grumble Goblin'], ['🦖', 'Count-a-saurus'], ['🤖', 'Robo-Riddler']];
+const BOSS_MOODS = ['Grumpy', 'Sneaky', 'Mega', 'Wobbly', 'Spiky', 'Giant', 'Tricky', 'Sleepy'];
+const bossReady = (p, topicId) => (p.bossProgress[topicId] ?? 0) >= BOSS_EVERY;
+
+function bossFor(topicId) {
+  const h = [...topicId].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const [emoji, name] = BOSS_LOOKS[h % BOSS_LOOKS.length];
+  return { emoji, name: `${BOSS_MOODS[(h >> 3) % BOSS_MOODS.length]} ${name}` };
+}
+
+function renderBossIntro(topicId) {
+  const p = currentProfile();
+  const topic = findTopic(topicId);
+  const b = bossFor(topicId);
+  const wins = p.bossWins[topicId] ?? 0;
+  show(`
+    <div class="screen">
+      ${playerBar(p)}
+      <div class="panel boss-intro">
+        <div class="boss-big">${b.emoji}</div>
+        <h2>A wild ${esc(b.name)} appeared!</h2>
+        <p class="panel-note">It wants to stop your ${topic.emoji} ${esc(topic.name)} practice. Each answer you get right on the first try takes one of its ${BOSS_HP} hearts ❤️. Each first miss costs one of your ${BOSS_SHIELDS} shields 🛡️.${wins ? ` You've beaten it ${wins} time${wins > 1 ? 's' : ''}!` : ''}</p>
+        <div class="panel-actions">
+          <button class="btn secondary" data-action="normal">Normal quest</button>
+          <button class="btn" data-action="battle">⚔️ Battle!</button>
+        </div>
+      </div>
+    </div>`);
+  bindSound();
+  sounds.wrong();
+  on('[data-action="back"]', renderTopics);
+  on('[data-action="normal"]', () => startRound(topicId));
+  on('[data-action="battle"]', () => {
+    startRound(topicId);
+    Object.assign(session, { boss: { ...b, hp: BOSS_HP, shields: BOSS_SHIELDS }, total: BOSS_MAX_QUESTIONS, auto: false, tellOff: true });
+    renderQuestion();
+    say(`Let's beat the ${b.name} together! ⚔️`, 'happy');
+  });
+}
+
+const bossBar = (b) => `
+  <div class="boss-bar" id="bossBar">
+    <span class="boss-emoji" id="bossEmoji">${b.emoji}</span>
+    <span class="boss-info"><strong>${esc(b.name)}</strong><span class="boss-hearts">${'❤️'.repeat(Math.max(0, b.hp))}${'🤍'.repeat(BOSS_HP - Math.max(0, b.hp))}</span></span>
+    <span class="boss-shields" title="Your shields">${'🛡️'.repeat(Math.max(0, b.shields))}<span class="lost">${'🛡️'.repeat(BOSS_SHIELDS - Math.max(0, b.shields))}</span></span>
+  </div>`;
+
+function refreshBossBar() {
+  const el = app.querySelector('#bossBar');
+  if (el) el.outerHTML = bossBar(session.boss);
+}
+
+function bossHit() {
+  session.boss.hp--;
+  refreshBossBar();
+  const e = app.querySelector('#bossEmoji');
+  e?.classList.add('hit');
+  if (session.boss.hp <= 0) {
+    e?.classList.add('defeated');
+    confetti(120);
+  }
+}
+
+function bossAttack() {
+  session.boss.shields--;
+  refreshBossBar();
+  app.querySelector('#bossEmoji')?.classList.add('attack');
+}
+
+function finishBoss() {
+  const p = currentProfile();
+  const { topic, firstTry, missed, boss, level, index } = session;
+  const won = boss.hp <= 0;
+  // Save the round first so it counts toward the weekly and team goals.
+  const entry = { t: Date.now(), topic: topic.id, level, firstTry, total: index, boss: won ? 'won' : 'lost', whyAsked: session.whyAsked, whyRight: session.whyRight, hinted: session.hinted, byTopic: session.byTopic };
+  p.history.unshift(entry);
+  p.history.length = Math.min(p.history.length, HISTORY_MAX);
+  const bonuses = [];
+  if (won) bonuses.push([`👾 Beat the ${boss.name}`, 10 + 5 * level]);
+  goalBonus(p, bonuses);
+  teamBonus(p, bonuses);
+  const coins = session.points + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  entry.coins = coins;
+  p.questCount++;
+  if (won) {
+    p.bossProgress[topic.id] = 0;
+    p.bossWins[topic.id] = (p.bossWins[topic.id] ?? 0) + 1;
+  }
+  p.coins += coins;
+  const grown = growBuddy(p, coins);
+  const stickers = checkStickers(p, { kind: 'boss', won });
+  save();
+
+  sounds.win();
+  if (won) confetti(200);
+  const buddyLine = grown.after > grown.before
+    ? 'Look, I grew! Thank you for practicing with me! 🎉'
+    : won ? `We did it! The ${boss.name} ran away! 🏆` : `The ${boss.name} got away this time. It'll be back, and we'll be ready! 💪`;
+
+  show(`
+    <div class="screen">
+      <div class="panel results">
+        ${buddyRow(p, buddyLine)}
+        <div class="boss-big ${won ? 'defeated' : ''}">${boss.emoji}</div>
+        <h2>${won ? `🏆 You beat the ${esc(boss.name)}!` : `The ${esc(boss.name)} escaped!`}</h2>
+        <p class="result-line">${firstTry} of ${index} right on the first try · ${'❤️'.repeat(Math.max(0, boss.hp))}${'🤍'.repeat(BOSS_HP - Math.max(0, boss.hp))}</p>
+        <p class="result-line">🪙 +${session.points} coins</p>
+        ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${stickerLine(stickers)}
+        ${grewLine(p, grown)}
+        ${growLine(p, coins)}
+        ${missed.length ? `<div class="review"><h3>Let's look at these again</h3>
+          ${missed.map((m) => `<div class="review-row"><span>${esc(m.question)}</span><strong>${esc(m.answer)}</strong></div>`).join('')}</div>` : ''}
+        <div class="panel-actions">
+          ${missed.length ? `<button class="btn secondary" data-action="replay">🔁 Try these again</button>` : ''}
+          ${won ? '' : '<button class="btn" data-action="rematch">⚔️ Rematch</button>'}
+          <button class="btn ${won ? '' : 'secondary'}" data-action="topics">Pick a quest</button>
+        </div>
+      </div>
+    </div>`);
+  bindBubble();
+  say(buddyLine, 'happy');
+  if (grown.after > grown.before) app.querySelector('#buddy').classList.add('growing');
+  if (p.autoRead) speak(`${won ? `You beat the ${boss.name}!` : `The ${boss.name} escaped.`} ${buddyLine}`);
+  on('[data-action="topics"]', renderTopics);
+  on('[data-action="replay"]', () => startReplay(missed));
+  on('[data-action="rematch"]', () => renderBossIntro(topic.id));
 }
 
 /* ---------------------------- Daily warm-up ---------------------------- */
@@ -2007,6 +2243,7 @@ function finishSpeed() {
   const bonuses = [];
   if (newBest && oldBest) bonuses.push(['🏅 New best', SPEED_NEW_BEST]);
   goalBonus(p, bonuses);
+  teamBonus(p, bonuses);
   p.history[0].coins = score + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += p.history[0].coins;
   p.questCount++;
