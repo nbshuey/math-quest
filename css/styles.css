@@ -876,3 +876,15 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .new-stickers .sticker { flex-direction: row; padding: 4px 10px; gap: 6px; font-weight: 800; box-shadow: none; }
 .new-stickers .sticker b { font-size: 1.5rem; }
 .file-btn { cursor: pointer; }
+
+/* ----- Daily warm-up ----- */
+.warmup-card { border: 3px solid #ffb020; }
+.warmup-card.done { border-style: dashed; }
+
+/* ----- Word problems one sentence at a time ----- */
+.sentences .sentence.hidden { display: none; }
+.sentences .sentence { opacity: 0.6; }
+.sentences .sentence.latest { opacity: 1; background: #fff3bf; border-radius: 8px; padding: 0 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+#nextSentence { margin: 4px auto 8px; display: block; }
+.planner { text-align: left; background: var(--soft); border-radius: 14px; padding: 10px 14px; margin: 6px auto 10px; max-width: 34em; display: flex; flex-direction: column; gap: 6px; font-size: 1.05rem; line-height: 1.5; }
+.planner .chip { display: inline-block; background: #fff; border: 2px solid var(--primary); border-radius: 99px; padding: 0 10px; margin: 2px 2px; font-weight: 800; }

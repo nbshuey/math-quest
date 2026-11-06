@@ -52,7 +52,8 @@ function weekStart(weeksAgo = 0) {
   return d.setDate(d.getDate() - d.getDay() - 7 * weeksAgo);
 }
 const HISTORY_MAX = 200; // rounds kept, for Recent quests and weekly reports
-const questsThisWeek = (p) => p.history.filter((h) => h.t >= weekStart()).length;
+// Warm-ups are extra practice, so they don't count toward the weekly goal.
+const questsThisWeek = (p) => p.history.filter((h) => h.t >= weekStart() && h.topic !== 'warmup').length;
 
 function show(html) {
   stopSpeaking();
@@ -226,6 +227,7 @@ function renderEdit(id) {
         <div class="toggle-list">
           ${canSpeak ? `<button class="toggle-opt ${draft.autoRead ? 'selected' : ''}" data-toggle="autoRead"><span class="check"></span>🔊 Read questions out loud</button>` : ''}
           <button class="toggle-opt ${draft.easyRead ? 'selected' : ''}" data-toggle="easyRead"><span class="check"></span>🔤 Easy-reading text (bigger, spaced out, calmer)</button>
+          <button class="toggle-opt ${draft.wordSteps ? 'selected' : ''}" data-toggle="wordSteps"><span class="check"></span>📖 Word problems one sentence at a time, then “What do we know? What are we finding?”</button>
         </div>
         <div class="panel-actions">
           ${existing && state.profiles.length > 1 ? '<button class="btn danger" data-action="delete">Delete</button>' : ''}
@@ -256,7 +258,7 @@ function renderEdit(id) {
   });
   on('[data-action="save"]', () => {
     const name = app.querySelector('#name').value.trim() || 'Player';
-    const reading = { autoRead: !!draft.autoRead, easyRead: !!draft.easyRead };
+    const reading = { autoRead: !!draft.autoRead, easyRead: !!draft.easyRead, wordSteps: !!draft.wordSteps };
     if (existing) Object.assign(existing, { name, grade: draft.grade, avatar: draft.avatar, ...reading });
     else state.profiles.push({ ...makeProfile(name, draft.grade, draft.avatar), ...reading });
     save();
@@ -321,7 +323,7 @@ function renderTopics() {
       ${growLine(p)}
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
       ${goal}
-      <div class="topics">${speedCard(p)}${cards}</div>
+      <div class="topics">${warmupCard(p)}${speedCard(p)}${cards}</div>
     </div>`);
 
   bindSound();
@@ -329,6 +331,10 @@ function renderTopics() {
   on('[data-action="back"]', renderHome);
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="speed"]', renderSpeedIntro);
+  on('[data-action="warmup"]', () => {
+    startQueue(warmupQueue(p), 'warmup');
+    say(warmupDone(p) ? 'Extra warm-up! No bonus this time, but great practice. ☀️' : 'Good morning, brain! 5 quick ones. ☀️', 'happy');
+  });
   on('[data-action="stickers"]', renderStickers);
   on('[data-level]', (el) => {
     if (el.dataset.level === 'auto') p.autoLevel = true;
@@ -495,8 +501,9 @@ function renderParents(childId = state.currentId) {
       return `<div class="review-row"><span>${date} · ⚡ Speed Round · ${lvl?.emoji ?? ''}</span>
         <strong>${h.speed} in ${minutes(h.seconds)}${h.wrong ? ` · ✗ ${h.wrong}` : ''}</strong></div>`;
     }
-    return `<div class="review-row"><span>${date} · ${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)} · ${lvl?.emoji ?? ''}</span>
-      <strong>${h.firstTry}/${QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}${h.hinted ? ` · 💡 ${h.hinted}` : ''}</strong></div>`;
+    const label = h.topic === 'warmup' ? '☀️ Daily warm-up' : `${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)}`;
+    return `<div class="review-row"><span>${date} · ${label} · ${lvl?.emoji ?? ''}</span>
+      <strong>${h.firstTry}/${h.total ?? QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}${h.hinted ? ` · 💡 ${h.hinted}` : ''}</strong></div>`;
   }).join('');
 
   const speedBests = Object.entries(p.speed.best)
@@ -677,6 +684,8 @@ function weekSummary(p, weeksAgo) {
   const rounds = p.history.filter((h) => h.t >= from && h.t < to);
   const quests = rounds.filter((h) => h.topic !== 'speed');
   const speedRounds = rounds.filter((h) => h.topic === 'speed');
+  const warmups = rounds.filter((h) => h.topic === 'warmup');
+  const goalCount = rounds.length - warmups.length; // what counts toward the weekly goal
   const sum = (list, key) => list.reduce((n, h) => n + (h[key] || 0), 0);
   const topics = {};
   for (const h of quests) {
@@ -694,7 +703,7 @@ function weekSummary(p, weeksAgo) {
   const first = Object.values(topics).reduce((n, t) => n + t.first, 0);
   const best1 = Math.max(0, ...speedRounds.filter((h) => h.seconds === 60).map((h) => h.speed));
   return {
-    from, to, rounds, quests, speedRounds, topics, days, perDay, asked, first,
+    from, to, rounds, quests, speedRounds, warmups, goalCount, topics, days, perDay, asked, first,
     whyAsked: sum(quests, 'whyAsked'), whyRight: sum(quests, 'whyRight'),
     tellAsked: sum(quests, 'tellAsked'), told: sum(quests, 'told'),
     hinted: sum(quests, 'hinted'), coins: sum(rounds, 'coins'),
@@ -767,7 +776,7 @@ function renderReport(childId, weeksAgo = 0) {
         </div>
         ${w.rounds.length ? `
         <div class="tiles">
-          <div class="tile"><strong>${w.rounds.length}${goal}</strong><span>quests${p.weeklyGoal && w.rounds.length >= p.weeklyGoal ? ' 🎯' : ''}</span>${change(w.rounds.length, last.rounds.length)}</div>
+          <div class="tile"><strong>${w.goalCount}${goal}</strong><span>quests${p.weeklyGoal && w.goalCount >= p.weeklyGoal ? ' 🎯' : ''}</span>${change(w.goalCount, last.goalCount)}</div>
           <div class="tile"><strong>${w.days.size} of 7</strong><span>days practiced</span></div>
           <div class="tile"><strong>${w.asked ? `${firstPct}%` : '–'}</strong><span>right first try</span>${w.asked && lastPct !== null ? change(firstPct, lastPct, '%') : ''}</div>
           <div class="tile"><strong>${w.asked}</strong><span>questions</span></div>
@@ -793,6 +802,7 @@ function renderReport(childId, weeksAgo = 0) {
           ${w.whyAsked ? `<div class="review-row"><span>🧠 Picked the right explanation</span><strong>${w.whyRight} of ${w.whyAsked}</strong></div>` : ''}
           ${w.tellAsked ? `<div class="review-row"><span>🗣️ Great explaining out loud</span><strong>${w.told} of ${w.tellAsked}</strong></div>` : ''}
           ${w.asked ? `<div class="review-row"><span>💡 Questions with a hint</span><strong>${w.hinted} of ${w.asked}</strong></div>` : ''}
+          ${w.warmups.length ? `<div class="review-row"><span>☀️ Daily warm-ups</span><strong>${w.warmups.length} · ${pctOf(w.warmups.reduce((n, h) => n + h.firstTry, 0), w.warmups.reduce((n, h) => n + h.total, 0))}% right first try</strong></div>` : ''}
           ${w.speedRounds.length ? `<div class="review-row"><span>⚡ Speed Rounds</span><strong>${w.speedRounds.length}${w.best1 ? ` · best ${w.best1} in 1 min` : ''} · ${pctOf(w.speedRight, w.speedRight + w.speedWrong)}% right</strong></div>` : ''}
         </div>
         ${facts.length && weeksAgo === 0 ? `<p class="panel-note"><strong>Facts to practice:</strong> ${facts.map(esc).join(' · ')}</p>` : ''}
@@ -923,7 +933,7 @@ function trackLevel(firstTry) {
 
 function nextQuestion() {
   session.index++;
-  if (session.index >= session.total) session.queue ? finishReplay() : finishRound();
+  if (session.index >= session.total) session.mode === 'warmup' ? finishWarmup() : session.queue ? finishReplay() : finishRound();
   else loadQuestion();
 }
 
@@ -938,9 +948,53 @@ function questionSpeech(q) {
   return parts.join('. ').replace(/\?\./g, '?');
 }
 
+// "Ruby has 32 gems and gets 17 more. How many gems now?" → two sentences.
+const splitSentences = (text) => text.split(/(?<=[.?!])\s+(?=[A-Z0-9"])/).filter(Boolean);
+
+function sentencePrompt(sentences) {
+  return `<div class="prompt word sentences" id="sentences">${sentences
+    .map((t, i) => `<span class="sentence ${i ? 'hidden' : 'latest'}">${esc(t)}</span>`)
+    .join(' ')}</div>
+    <button class="btn secondary small" data-action="nextSentence" id="nextSentence">📖 Next sentence (2 of ${sentences.length})</button>
+    <div class="planner hidden" id="planner"></div>`;
+}
+
+// Shows the next sentence; after the last one, a "What do we know? What are we finding?" box.
+function showSentence(sentences) {
+  const n = session.shownSentences;
+  if (!sentences || n >= sentences.length) return;
+  const spans = app.querySelectorAll('#sentences .sentence');
+  spans.forEach((el) => el.classList.remove('latest'));
+  spans[n].classList.remove('hidden');
+  spans[n].classList.add('latest');
+  session.shownSentences++;
+  if (currentProfile().autoRead) speak(sentences[n]);
+  const btn = app.querySelector('#nextSentence');
+  if (session.shownSentences < sentences.length) {
+    btn.textContent = `📖 Next sentence (${session.shownSentences + 1} of ${sentences.length})`;
+    return;
+  }
+  btn.remove();
+  const asks = sentences.filter((t) => t.trim().endsWith('?'));
+  const facts = sentences.filter((t) => !t.trim().endsWith('?')).join(' ');
+  // Each number with the word after it: "32 gems", "17 more", "90°".
+  const filler = /^ (of|and|a|an|the|to|in|on|is|then)$/i;
+  const known = [...facts.matchAll(/(\d[\d,]*(?::\d\d)?(?:\/\d+)?(?: \d+\/\d+)?)(°| square [a-zA-Z]+| [a-zA-Z]+)?/g)]
+    .map((m) => `${m[1]}${m[2] && !filler.test(m[2]) ? m[2] : ''}`);
+  const planner = app.querySelector('#planner');
+  planner.innerHTML = `
+    ${known.length ? `<div><strong>🔎 What do we know?</strong> ${known.map((k) => `<span class="chip">${esc(k)}</span>`).join(' ')}</div>` : ''}
+    ${asks.length ? `<div><strong>🎯 What are we finding?</strong> ${esc(asks[asks.length - 1])}</div>` : ''}`;
+  planner.classList.remove('hidden');
+}
+
 function renderQuestion() {
   const p = currentProfile();
   const q = session.current;
+  // 📖 Word problems one sentence at a time (a reading-help setting).
+  const split = q.word ? splitSentences(q.prompt) : [];
+  const sentences = p.wordSteps && split.length > 1 ? split : null;
+  session.shownSentences = 1;
   const pct = (session.index / session.total) * 100;
   const input = q.choices
     ? `<div class="choices ${q.claim !== undefined ? 'two' : ''} ${q.choices.some((c) => c.length > 6) ? 'long' : ''}">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
@@ -970,8 +1024,8 @@ function renderQuestion() {
       ${buddyRow(p, greeting)}
       <div class="question" id="question">
         ${sayButton('question', 'Read the question aloud')}
-        <div class="q-count">${session.topic.emoji} ${session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
-        <div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>
+        <div class="q-count">${session.topic.emoji} ${session.mode === 'warmup' ? 'Warm-up ' : session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
+        ${sentences ? sentencePrompt(sentences) : `<div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>`}
         ${q.visual ? `<div class="visual">${q.visual}</div>` : ''}
         ${claim}
         ${q.choices ? '' : '<div class="answer-display" id="answer">&nbsp;</div>'}
@@ -989,7 +1043,8 @@ function renderQuestion() {
     </div>`);
 
   bindBubble();
-  on('[data-say="question"]', () => speak(questionSpeech(q)));
+  on('[data-say="question"]', () => speak(sentences && session.shownSentences < sentences.length ? sentences.slice(0, session.shownSentences).join(' ') : questionSpeech(q)));
+  on('[data-action="nextSentence"]', () => showSentence(sentences));
   on('[data-key]', (el) => pressKey(el.dataset.key));
   on('[data-choice]', (el) => submit(el.dataset.choice, el));
   on('[data-action="hint"]', showHint);
@@ -997,7 +1052,7 @@ function renderQuestion() {
   on('[data-action="quit"]', () => {
     if (confirm('Quit this quest? Your progress in this round will be lost.')) renderTopics();
   });
-  if (p.autoRead) speak(questionSpeech(q));
+  if (p.autoRead) speak(sentences ? sentences[0] : questionSpeech(q));
 }
 
 function pressKey(key) {
@@ -1394,6 +1449,9 @@ const STICKERS = [
   { id: 'detective', emoji: '🕵️', name: 'Detective', how: 'Get 8 or more in Fix the Mistake.', test: (p, c) => quest(c) && c.topicId === 'mistake' && c.firstTry >= 8 },
   { id: 'mixmaster', emoji: '🎲', name: 'Mix master', how: 'Get 8 or more in Mixed Challenge.', test: (p, c) => quest(c) && c.topicId === 'mixed' && c.firstTry >= 8 },
   { id: 'comeback', emoji: '🔁', name: 'Comeback kid', how: 'Fix every one in a “Try these again” round.', test: (p, c) => c.kind === 'replay' && c.firstTry === c.total },
+  { id: 'earlybird', emoji: '☀️', name: 'Early bird', how: 'Finish a daily warm-up.', test: (p, c) => c.kind === 'warmup' },
+  { id: 'warm3', emoji: '🌤️', name: 'Warm streak', how: 'Do the daily warm-up 3 days in a row.', test: (p) => (p.warmup?.streak ?? 0) >= 3 },
+  { id: 'warm7', emoji: '🌞', name: 'Sunny week', how: 'Do the daily warm-up 7 days in a row.', test: (p) => (p.warmup?.streak ?? 0) >= 7 },
   { id: 'quick', emoji: '⚡', name: 'Quick', how: 'Get 10 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 10 },
   { id: 'rocket', emoji: '🚀', name: 'Rocket', how: 'Get 20 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 20 },
   { id: 'sharp', emoji: '🎯', name: 'Sharpshooter', how: 'Get 10 or more in a Speed Round with no misses.', test: (p, c) => c.kind === 'speed' && c.score >= 10 && c.wrong === 0 },
@@ -1449,6 +1507,100 @@ function renderStickers() {
   on('[data-action="back"]', renderTopics);
 }
 
+/* ---------------------------- Daily warm-up ---------------------------- */
+
+// 5 quick questions a day, mostly from focus areas, recent misses and tricky topics.
+const WARMUP_SIZE = 5;
+const WARMUP_BONUS = 5;
+const today = () => startOfDay(Date.now());
+const warmupDone = (p) => p.warmup?.day === today();
+// The streak only counts if the last warm-up was today or yesterday.
+const warmupStreak = (p) => (p.warmup && today() - p.warmup.day <= 86400000 * 1.5 ? p.warmup.streak : 0);
+
+function warmupCard(p) {
+  const streak = warmupStreak(p);
+  const streakText = streak ? `🔥 ${streak}-day streak` : 'Start a streak!';
+  return `
+    <button class="topic-card warmup-card ${warmupDone(p) ? 'done' : ''}" data-action="warmup">
+      <div class="topic-emoji">${warmupDone(p) ? '✅' : '☀️'}</div>
+      <div class="topic-name">Daily warm-up</div>
+      <div class="topic-desc">${warmupDone(p) ? 'Done today! Come back tomorrow.' : `${WARMUP_SIZE} quick questions · 🪙 bonus`}</div>
+      <div class="speed-best">${streakText}</div>
+    </button>`;
+}
+
+function warmupQueue(p) {
+  const core = coreTopics(p.grade);
+  const weekAgo = Date.now() - 7 * 86400000;
+  const missedLately = new Set(
+    p.history.filter((h) => h.t >= weekAgo && h.byTopic).flatMap((h) => Object.entries(h.byTopic).filter(([, [asked, first]]) => first < asked).map(([id]) => id)),
+  );
+  const tricky = (id) => p.stats[id]?.asked >= 3 && p.stats[id].firstTry / p.stats[id].asked < 0.7;
+  const weight = (t) => 1 + (p.focus.includes(t.id) ? 3 : 0) + (missedLately.has(t.id) ? 2 : 0) + (tricky(t.id) ? 2 : 0);
+  // Weighted picks, each topic at most once.
+  const pool = [...core];
+  const picks = [];
+  while (picks.length < WARMUP_SIZE && pool.length) {
+    let r = Math.random() * pool.reduce((n, t) => n + weight(t), 0);
+    const i = pool.findIndex((t) => (r -= weight(t)) < 0);
+    picks.push(pool.splice(i < 0 ? 0 : i, 1)[0]);
+  }
+  return picks.map((t) => ({ topicId: t.id, level: topicLevel(p, t.id) }));
+}
+
+function finishWarmup() {
+  const p = currentProfile();
+  const { firstTry, total, missed } = session;
+  const first = !warmupDone(p);
+  const bonuses = [];
+  if (first) {
+    const streak = warmupStreak(p) + 1;
+    p.warmup = { day: today(), streak };
+    bonuses.push([`☀️ Daily warm-up${streak > 1 ? ` · ${streak}-day streak` : ''}`, WARMUP_BONUS + Math.min(streak - 1, 5)]);
+  }
+  const coins = session.points + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  const level = [3, 2, 1].reduce((best, l) => (session.levelCounts[l] > session.levelCounts[best] ? l : best), 3);
+  p.history.unshift({ t: Date.now(), topic: 'warmup', level, firstTry, total, whyAsked: session.whyAsked, whyRight: session.whyRight, hinted: session.hinted, byTopic: session.byTopic, coins });
+  p.history.length = Math.min(p.history.length, HISTORY_MAX);
+  p.coins += coins;
+  const grown = growBuddy(p, coins);
+  const stickers = checkStickers(p, { kind: 'warmup', firstTry, total });
+  save();
+
+  sounds.win();
+  confetti(first ? 100 : 40);
+  const streak = warmupStreak(p);
+  const buddyLine = grown.after > grown.before
+    ? 'Look, I grew! Thank you for practicing with me! 🎉'
+    : first ? (streak > 1 ? `${streak} days in a row! Your brain is warmed up! 🔥` : 'Brain warmed up! See you tomorrow! ☀️') : 'Extra practice makes extra strong! 💪';
+
+  show(`
+    <div class="screen">
+      <div class="panel results">
+        ${buddyRow(p, buddyLine)}
+        <h2>☀️ Warm-up done! ${firstTry} of ${total}</h2>
+        ${first ? `<p class="result-line">🔥 Warm-up streak: <strong>${streak} day${streak > 1 ? 's' : ''}</strong></p>` : ''}
+        <p class="result-line">🪙 +${session.points} coins</p>
+        ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${stickerLine(stickers)}
+        ${grewLine(p, grown)}
+        ${growLine(p, coins)}
+        ${missed.length ? `<div class="review"><h3>Let's look at these again</h3>
+          ${missed.map((m) => `<div class="review-row"><span>${esc(m.question)}</span><strong>${esc(m.answer)}</strong></div>`).join('')}</div>` : ''}
+        <div class="panel-actions">
+          ${missed.length ? `<button class="btn" data-action="replay">🔁 Try these again (${missed.length})</button>` : ''}
+          <button class="btn ${missed.length ? 'secondary' : ''}" data-action="topics">Pick a quest</button>
+        </div>
+      </div>
+    </div>`);
+  bindBubble();
+  say(buddyLine, 'happy');
+  if (grown.after > grown.before) app.querySelector('#buddy').classList.add('growing');
+  if (p.autoRead) speak(`Warm-up done! ${firstTry} of ${total}. ${buddyLine}`);
+  on('[data-action="topics"]', renderTopics);
+  on('[data-action="replay"]', () => startReplay(missed));
+}
+
 /* ---------------------------- Try these again ---------------------------- */
 
 // A short round with fresh questions of the same kinds the kid just missed.
@@ -1456,11 +1608,17 @@ const REPLAY_MAX = 5;
 const REPLAY_BONUS = 5; // for fixing every one
 
 function startReplay(missed) {
+  startQueue(missed.slice(0, REPLAY_MAX).map((m) => ({ topicId: m.topicId, level: m.level })), 'replay');
+  say(`New numbers, same kind of problem. You've got this! 🔁`, 'happy');
+}
+
+// A short round from a list of { topicId, level }: Try these again, or the daily warm-up.
+function startQueue(queue, mode) {
   const p = currentProfile();
-  const queue = missed.slice(0, REPLAY_MAX).map((m) => ({ topicId: m.topicId, level: m.level }));
   session = {
+    mode,
     topic: {
-      id: 'replay', name: 'Try again', emoji: '🔁',
+      id: mode, name: mode === 'warmup' ? 'Warm-up' : 'Try again', emoji: mode === 'warmup' ? '☀️' : '🔁',
       gen: (level) => {
         const m = session.queue[session.index];
         return { topicId: m.topicId, ...findTopic(m.topicId).gen(level) };
@@ -1472,7 +1630,6 @@ function startReplay(missed) {
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: true, hinted: 0,
   };
   loadQuestion();
-  say(`New numbers, same kind of problem. You've got this! 🔁`, 'happy');
 }
 
 function finishReplay() {

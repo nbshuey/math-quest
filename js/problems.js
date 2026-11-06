@@ -221,7 +221,7 @@ const multiples = (step, count) => Array.from({ length: count }, (_, i) => step 
 
 function addition(level) {
   let a, b;
-  if (level === 1) { a = rand(1, 12); b = rand(1, 20 - a); }
+  if (level === 1) { a = rand(2, 12); b = rand(1, 20 - a); }
   else if (level === 2) { a = rand(10, 80); b = rand(5, 99 - a); }
   else { a = rand(100, 800); b = rand(25, 999 - a); }
   const sum = a + b;

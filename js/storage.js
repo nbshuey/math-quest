@@ -23,6 +23,7 @@ function normalizeProfile(p) {
     theme: 'sunny',
     autoRead: false,
     easyRead: false,
+    wordSteps: false, // word problems one sentence at a time
     // Set by a grown-up on the Grown-ups page.
     focus: [], // topic ids to practice more
     whyEvery: false, // ask "How do you know?" after every right answer

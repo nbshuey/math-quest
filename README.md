@@ -14,14 +14,16 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - **🧭 Auto level**: each topic (and the Speed Round) keeps its own level. During a round it goes up after 3 first-try answers in a row and down after 2 misses in a row, with the buddy announcing the change. Coins and stars follow the level each question was at. The Speed Round levels up after a fast round (15+ a minute, 90% right) and down when under 70% are right. Kids pick it on the quest screen; grown-ups can switch it on the Grown-ups page and see each topic's current level.
 - **👣 Step-by-step hints**: every question type has its own worked steps, shown one tap at a time ("Ones: 8 + 9 = 17. Write 7 and carry 1." → "Tens: 4 + 1 carried = ?"). The last step always leaves the final bit for the kid. Each step has a 🔊 button. Many steps come with a picture: adding and subtracting lined up in columns (with carried and borrowed digits), hops on a number line for counting on and skip counting, dot rows and area models for multiplying, a number line for rounding, and fraction bars and hundred grids for fractions and decimals.
 - **Kid-friendly feedback**: the next hint step after the first miss, the answer shown after the second, and a review list at the end
+- **☀️ Daily warm-up**: 5 quick questions a day from different topics, weighted toward focus areas, recent misses and topics under 70%. The first warm-up each day pays a bonus that grows with the streak (5 coins + 1 per streak day, up to +5). Warm-ups don't count toward the weekly goal but do count as practice days; the weekly report lists them.
 - **🔁 Try these again**: after a quest with misses, replay up to 5 fresh questions of the same kinds and levels. Fixing them all pays a 5-coin bonus and the Comeback kid sticker.
-- **📒 Sticker book**: 27 stickers for good habits as well as right answers (first quest, 5 in a row, perfect, Hard quests, explaining, Fix the Mistake, Speed Round scores, 10/50/100 quests, 3- and 5-day weeks, weekly goal, exploring topics, growing buddies, shopping). Each new one pays 5 coins and shows on the results screen. Grey stickers say how to get them; the weekly report lists the week's new ones.
+- **📒 Sticker book**: 30 stickers for good habits as well as right answers (first quest, 5 in a row, perfect, Hard quests, explaining, Fix the Mistake, Speed Round scores, 10/50/100 quests, 3- and 5-day weeks, weekly goal, exploring topics, growing buddies, shopping). Each new one pays 5 coins and shows on the results screen. Grey stickers say how to get them; the weekly report lists the week's new ones.
 - **Reasoning practice**:
   - **🧠 How do you know?**: on questions 3, 6 and 9 (or the next one answered right first try), kids pick the explanation that matches the thinking. Many come with a picture model: area models for multiplication, number lines for rounding, fraction bars. Right explanations earn bonus coins.
   - **🕵️ Fix the Mistake**: the buddy answers a question (sometimes right, often with a common mistake). Kids decide if the buddy is right, then pick the right thinking.
   - **🗣️ Tell your grown-up**: up to twice a round, after picking an explanation, kids explain it out loud using sentence starters ("First I…, then I…", "I can check it by…"). A grown-up taps ⭐ Great explaining (bonus coins) or 💪 Getting there; "No grown-up here right now" skips it for the round. Can be turned off on the Grown-ups page.
 - **Reading help** (per player, in ✏️ Edit player):
   - **🔊 Read aloud**: every question, hint and explanation has a speaker button, and math is read as words ("3 eighths", "remainder 2"). Can also read every question automatically.
+  - **📖 Word problems one sentence at a time**: a Next sentence button shows each sentence in turn, then a box with "What do we know?" (the numbers, as chips) and "What are we finding?" (the question). Read aloud reads each sentence as it appears.
   - **🔤 Easy-reading text**: Lexend font, extra letter and line spacing, left-aligned word problems, a softer background and no floating decorations.
 - **Buddy & shop**: each player has a buddy who cheers them on. Coins buy 28 buddies (fox, penguin, ninja, mermaid, astronaut, superhero, dragon…), 14 hats, 14 extras for the buddy to hold (balloon, guitar, magic wand, skateboard, rocket…), and themes that restyle the whole app (Animal Jungle, Under the Sea, Wizard Tower, Dragon's Lair, Outer Space). Buying takes two taps to avoid accidents. ✨🌟 Special items (Giant gem, Star clip, Math trophy, Blaze the Eagle) can't be bought: they unlock free when any buddy grows to 🌿 Big, ✨ Super or 🌟 Legend, and the results screen announces them.
 - **🌱 Growing buddies**: buddies grow with every coin earned together: 🍼 Baby → 🌱 Little (40) → 🌿 Big (120) → ✨ Super (260, sparkles) → 🌟 Legend (500, golden glow). Each buddy grows on its own, a progress bar on the quest screen shows the next stage, and growing up gets a celebration on the results screen. Spending coins never shrinks a buddy; older saves start the current buddy with credit for rounds already played.
@@ -51,6 +53,14 @@ python3 serve.py
 Then open http://localhost:8000. `serve.py` is a tiny static server that tells the browser to always check for newer files, so updates show up with a normal refresh. (`python3 -m http.server` works too, but the browser may keep old files after an update; press Cmd+Shift+R if the page is blank.)
 
 Progress is saved per address, so keep using the same port (8000) to keep the kids' progress.
+
+### On an iPad (home-screen app)
+
+1. Start `python3 serve.py` on the Mac. It prints an address like `http://192.168.0.101:8000` for the iPad. If macOS asks whether Python may accept incoming connections, choose Allow.
+2. On the iPad (same Wi-Fi), open that address in Safari, tap Share, then **Add to Home Screen**. Math Quest opens full screen with its own icon.
+3. The iPad keeps its own progress, separate from the Mac. To move progress, save a backup on one device (Grown-ups page) and restore it on the other.
+
+The Mac must be on and running `serve.py` for the iPad to load the game.
 
 ## Project layout
 
