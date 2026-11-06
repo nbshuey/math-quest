@@ -2,7 +2,7 @@
 // No DOM here, so tests can import it.
 
 import { CATALOG, stageFor } from './shop.js';
-import { QUESTIONS_PER_ROUND, state, save, topicLevel, maxStage, coreTopics, GOAL_BONUS, startOfDay, weekStart, questsThisWeek, unlocksAt } from './state.js';
+import { QUESTIONS_PER_ROUND, state, save, topicLevel, maxStage, coreTopics, GOAL_BONUS, startOfDay, weekStart, questsThisWeek, unlocksAt, shuffle } from './state.js';
 
 export const buddyXp = (p, id = p.buddy) => p.buddyXp[id] ?? 0;
 
@@ -140,6 +140,7 @@ export const STICKERS = [
   { id: 'quick', emoji: '⚡', name: 'Quick', how: 'Get 10 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 10 },
   { id: 'rocket', emoji: '🚀', name: 'Rocket', how: 'Get 20 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 20 },
   { id: 'sharp', emoji: '🎯', name: 'Sharpshooter', how: 'Get 10 or more in a Speed Round with no misses.', test: (p, c) => c.kind === 'speed' && c.score >= 10 && c.wrong === 0 },
+  { id: 'test100', emoji: '📝', name: 'Test star', how: 'Get every question right on a Unit Test.', test: (p, c) => c.kind === 'test' && c.firstTry === c.total },
   { id: 'q10', emoji: '📚', name: 'Ten quests', how: 'Finish 10 quests.', test: (p) => p.questCount >= 10 },
   { id: 'q50', emoji: '🏰', name: 'Fifty quests', how: 'Finish 50 quests.', test: (p) => p.questCount >= 50 },
   { id: 'q100', emoji: '💯', name: 'Hundred club', how: 'Finish 100 quests.', test: (p) => p.questCount >= 100 },
@@ -216,6 +217,28 @@ export function warmupQueue(p) {
   }
   return picks.map((t) => ({ topicId: t.id, level: topicLevel(p, t.id) }));
 }
+
+// 📝 Unit Tests: no hints, no second try, no "How do you know?". A unit is one topic
+// (10 questions); the Grade review asks one question from every topic.
+export const TEST_SIZE = 10;
+
+export const TEST_PERFECT = 10; // bonus coins for a perfect test
+
+export const GRADE_REVIEW = 'all';
+
+export function testQueue(grade, unit, level) {
+  const ids = unit === GRADE_REVIEW ? shuffle(coreTopics(grade).map((t) => t.id)) : Array(TEST_SIZE).fill(unit);
+  return ids.map((topicId) => ({ topicId, level }));
+}
+
+// A test question keeps only what's needed to answer it: no hints, steps or explanations.
+export function noHelp(q) {
+  const { hint, steps, why, whyAsk, alwaysWhy, mistake, ...rest } = q;
+  return rest;
+}
+
+// The best test score (percent) for each unit and level.
+export const testBest = (p, unit, level) => p.testBest?.[`${unit}:${level}`];
 
 // Turn a saved fact ("7 × 8") back into a question, in either order for + and ×.
 export function factFromKey(key) {

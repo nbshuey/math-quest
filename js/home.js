@@ -8,6 +8,7 @@ import { birthdayGift, TEAM_BONUS, teamCount, teamOn, STICKERS, bossReady, WARMU
 import { app, starRow, show, applyLook, on, growLine, buddyRow, bindBubble, say, soundButton, bindSound } from './ui.js';
 import { session, startRound, renderBossIntro, startQueue, setSession } from './play.js';
 import { speedCard, renderSpeedIntro } from './speedround.js';
+import { testCard, renderTestIntro } from './unittest.js';
 import { renderShop, renderStickers } from './shopscreen.js';
 import { renderParentGate } from './parents.js';
 import { makeProfile } from './storage.js';
@@ -197,7 +198,7 @@ export function renderTopics() {
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
       ${goal}
       ${teamBar(p)}
-      <div class="topics">${warmupCard(p)}${speedCard(p)}${cards}</div>
+      <div class="topics">${warmupCard(p)}${speedCard(p)}${testCard(p)}${cards}</div>
     </div>`);
 
   bindSound();
@@ -205,6 +206,7 @@ export function renderTopics() {
   on('[data-action="back"]', renderHome);
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="speed"]', renderSpeedIntro);
+  on('[data-action="test"]', renderTestIntro);
   on('[data-action="warmup"]', () => {
     startQueue(warmupQueue(p), 'warmup');
     say(warmupDone(p) ? 'Extra warm-up! No bonus this time, but great practice. ☀️' : 'Good morning, brain! 5 quick ones. ☀️', 'happy');

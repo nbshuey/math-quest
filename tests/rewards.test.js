@@ -165,3 +165,31 @@ test('missed speed facts come back as the same fact', () => {
     assert.equal(f.answer, String({ '+': +a + +b, '−': a - b, '×': a * b, '÷': a / b }[op]));
   }
 });
+
+test('a unit test is 10 questions from one unit; the Grade review asks 1 from every unit', () => {
+  const unit = R.testQueue(4, 'angles', 2);
+  assert.equal(unit.length, R.TEST_SIZE);
+  assert.ok(unit.every((q) => q.topicId === 'angles' && q.level === 2));
+  for (const grade of [2, 3, 4]) {
+    const review = R.testQueue(grade, R.GRADE_REVIEW, 3);
+    assert.deepEqual(review.map((q) => q.topicId).sort(), coreTopics(grade).map((t) => t.id).sort());
+    assert.ok(review.every((q) => q.level === 3));
+  }
+});
+
+test('test questions have no hints, steps or explanations, but keep the question', () => {
+  for (const grade of [2, 3, 4]) {
+    for (const t of coreTopics(grade)) {
+      for (const level of [1, 2, 3]) {
+        const q = R.noHelp(t.gen(level));
+        for (const help of ['hint', 'steps', 'why', 'whyAsk', 'alwaysWhy', 'mistake']) assert.equal(q[help], undefined, `${t.id}: ${help}`);
+        assert.ok(q.prompt && q.answer, t.id);
+      }
+    }
+  }
+});
+
+test('a perfect unit test earns the Test star sticker', () => {
+  assert.equal(R.checkStickers(kid, { kind: 'test', firstTry: 9, total: 10 }).some((s) => s.id === 'test100'), false);
+  assert.ok(R.checkStickers(kid, { kind: 'test', firstTry: 10, total: 10 }).some((s) => s.id === 'test100'));
+});

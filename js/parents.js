@@ -79,6 +79,11 @@ export function renderParents(childId = state.currentId) {
       return `<div class="review-row"><span>${date} · ⚡ Speed Round · ${lvl?.emoji ?? ''}</span>
         <strong>${h.speed} in ${minutes(h.seconds)}${h.wrong ? ` · ✗ ${h.wrong}` : ''}</strong></div>`;
     }
+    if (h.topic === 'test') {
+      const u = h.unit === 'all' ? '🎓 Grade review' : `${findTopic(h.unit)?.emoji ?? ''} ${esc(findTopic(h.unit)?.name ?? h.unit)}`;
+      return `<div class="review-row"><span>${date} · 📝 Test: ${u} · ${lvl?.emoji ?? ''}</span>
+        <strong>${h.firstTry}/${h.total} · ${Math.round((h.firstTry / h.total) * 100)}%</strong></div>`;
+    }
     const label = h.topic === 'warmup' ? '☀️ Daily warm-up' : `${t?.emoji ?? ''} ${esc(t?.name ?? h.topic)}`;
     return `<div class="review-row"><span>${date} · ${label} · ${lvl?.emoji ?? ''}</span>
       <strong>${h.firstTry}/${h.total ?? QUESTIONS_PER_ROUND}${h.whyAsked ? ` · 🧠 ${h.whyRight}/${h.whyAsked}` : ''}${h.tellAsked ? ` · 🗣️ ${h.told}/${h.tellAsked}` : ''}${h.hinted ? ` · 💡 ${h.hinted}` : ''}</strong></div>`;

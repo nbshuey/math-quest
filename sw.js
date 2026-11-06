@@ -1,10 +1,10 @@
 // Offline support for the hosted app (https only; see js/app.js).
 // Network first, so updates show right away; the cached copy is used when offline.
-const CACHE = 'math-quest-v1';
+const CACHE = 'math-quest-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/styles.css',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
-  ...['app', 'effects', 'home', 'parents', 'play', 'problems', 'rewards', 'shop', 'shopscreen', 'speech', 'speedround', 'state', 'storage', 'ui'].map((f) => `js/${f}.js`),
+  ...['app', 'effects', 'home', 'parents', 'play', 'problems', 'rewards', 'shop', 'shopscreen', 'speech', 'speedround', 'state', 'storage', 'ui', 'unittest'].map((f) => `js/${f}.js`),
 ];
 
 self.addEventListener('install', (e) => {

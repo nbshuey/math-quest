@@ -1,15 +1,16 @@
 // Playing a round: questions, hints, "How do you know?", Tell your grown-up, results,
-// and the short rounds (Try these again, daily warm-up, boss battles).
+// and the short rounds (Try these again, daily warm-up, boss battles, 📝 Unit Tests).
 
 import { TOPICS, LEVELS, stepText } from './problems.js';
 import { confetti, sounds } from './effects.js';
 import { speak, choiceWords } from './speech.js';
 import { QUESTIONS_PER_ROUND, GREETINGS, pick, esc, save, currentProfile, buddyOf, levelById, topicLevel, AUTO_UP, AUTO_DOWN, buddyName, shuffle, coreTopics, findTopic, FOCUS_BONUS, HISTORY_MAX, PRAISE, ENCOURAGE } from './state.js';
-import { growBuddy, teamBonus, goalBonus, checkStickers, BOSS_HP, BOSS_SHIELDS, BOSS_MAX_QUESTIONS, bossFor, WARMUP_BONUS, today, warmupDone, warmupStreak } from './rewards.js';
+import { growBuddy, teamBonus, goalBonus, checkStickers, BOSS_HP, BOSS_SHIELDS, BOSS_MAX_QUESTIONS, bossFor, WARMUP_BONUS, today, warmupDone, warmupStreak, noHelp } from './rewards.js';
 import { app, starRow, sayButton, show, on, growLine, grewLine, buddyRow, bindBubble, say, bindSound, stickerLine } from './ui.js';
 import { playerBar, renderTopics } from './home.js';
 import { renderShop } from './shopscreen.js';
 import { BUDDIES, HATS, THEMES } from './shop.js';
+import { finishTest } from './unittest.js';
 
 export let session = null; // the round being played
 // Other modules can't assign an imported binding, so they call this.
@@ -43,15 +44,17 @@ export function loadQuestion() {
   do q = session.topic.gen(session.level, session.pool);
   while (session.seen.has(q.summary ?? q.prompt) && tries++ < 25);
   session.seen.add(q.summary ?? q.prompt);
+  // 📝 A test question has no hints, steps or "How do you know?".
+  if (session.test) q = noHelp(q);
   q.topicId ??= session.topic.id;
   q.level = session.level;
   session.levelCounts[q.level]++;
   const name = buddyName(currentProfile());
   for (const key of ['prompt', 'hint', 'summary']) if (q[key]) q[key] = q[key].replaceAll('{buddy}', name);
   // Each step is its text, or { text, pic } with a little picture.
-  q.steps = (q.steps?.length ? q.steps : [q.hint]).map((step) =>
+  q.steps = session.test ? [] : (q.steps?.length ? q.steps : [q.hint]).map((step) =>
     typeof step === 'string' ? step.replaceAll('{buddy}', name) : { ...step, text: step.text.replaceAll('{buddy}', name) });
-  if (WHY_AT.includes(session.index)) session.whyDue = true;
+  if (WHY_AT.includes(session.index) && !session.test) session.whyDue = true;
   Object.assign(session, { current: q, attempts: 0, locked: false, input: '', stepsShown: 0 });
   renderQuestion();
 }
@@ -78,7 +81,7 @@ export function nextQuestion() {
   session.index++;
   const b = session.boss;
   if (b && (b.hp <= 0 || b.shields <= 0 || session.index >= session.total)) finishBoss();
-  else if (session.index >= session.total) session.mode === 'warmup' ? finishWarmup() : session.queue ? finishReplay() : finishRound();
+  else if (session.index >= session.total) session.mode === 'test' ? finishTest() : session.mode === 'warmup' ? finishWarmup() : session.queue ? finishReplay() : finishRound();
   else loadQuestion();
 }
 
@@ -120,6 +123,7 @@ export function showSentence(sentences) {
     return;
   }
   btn.remove();
+  if (session.test) return; // the "What do we know?" box is help, so tests leave it out
   const asks = sentences.filter((t) => t.trim().endsWith('?'));
   const facts = sentences.filter((t) => !t.trim().endsWith('?')).join(' ');
   // Each number with the word after it: "32 gems", "17 more", "90°".
@@ -151,7 +155,8 @@ export function renderQuestion() {
       </div>`;
   const note = session.levelNote;
   session.levelNote = '';
-  const greeting = note || (q.claim !== undefined
+  const test = session.test;
+  const greeting = test ? 'No hints on a test. Do your best! 💪' : note || (q.claim !== undefined
     ? 'I tried this one. Did I get it right?'
     : session.streak >= 3 ? `${session.streak} in a row! 🔥` : pick(GREETINGS));
   const claim = q.claim !== undefined
@@ -164,26 +169,26 @@ export function renderQuestion() {
       <div class="topbar">
         <button class="icon-btn" data-action="quit" aria-label="Quit">✕</button>
         <div class="progress"><div style="width:${pct}%"></div></div>
-        <div class="streak" title="Streak">${session.streak >= 2 ? '🔥' : ''}${session.streak}</div>
+        ${test ? '<div class="streak">📝</div>' : `<div class="streak" title="Streak">${session.streak >= 2 ? '🔥' : ''}${session.streak}</div>`}
       </div>
       ${buddyRow(p, greeting)}
       ${session.boss ? bossBar(session.boss) : ''}
       <div class="question" id="question">
         ${sayButton('question', 'Read the question aloud')}
-        <div class="q-count">${session.topic.emoji} ${session.mode === 'warmup' ? 'Warm-up ' : session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
+        <div class="q-count">${session.topic.emoji} ${test ? 'Test question ' : session.mode === 'warmup' ? 'Warm-up ' : session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
         ${sentences ? sentencePrompt(sentences) : `<div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>`}
         ${q.visual ? `<div class="visual">${q.visual}</div>` : ''}
         ${claim}
         ${q.choices ? '' : '<div class="answer-display" id="answer">&nbsp;</div>'}
         <div class="feedback" id="feedback"></div>
-        <div class="hint hidden" id="hint">
+        ${test ? '' : `<div class="hint hidden" id="hint">
           <div class="hint-head">💡 Step by step</div>
           <ol class="steps" id="steps"></ol>
-        </div>
+        </div>`}
       </div>
       <div id="input-area">${input}</div>
       <div class="play-actions">
-        <button class="btn secondary" data-action="hint" id="hintBtn">💡 Hint</button>
+        ${test ? '' : '<button class="btn secondary" data-action="hint" id="hintBtn">💡 Hint</button>'}
         <button class="btn hidden" data-action="next" id="next">Next ➜</button>
       </div>
     </div>`);
@@ -196,7 +201,7 @@ export function renderQuestion() {
   on('[data-action="hint"]', showHint);
   on('[data-action="next"]', nextQuestion);
   on('[data-action="quit"]', () => {
-    if (confirm('Quit this quest? Your progress in this round will be lost.')) renderTopics();
+    if (confirm(test ? 'Stop the test? It won’t count.' : 'Quit this quest? Your progress in this round will be lost.')) renderTopics();
   });
   if (p.autoRead) speak(sentences ? sentences[0] : questionSpeech(q));
 }
@@ -212,6 +217,7 @@ export function pressKey(key) {
 // Step-by-step hints: each tap shows one more step. The last step always
 // leaves the final bit of work for the kid.
 export function showHint() {
+  if (session.test) return;
   const q = session.current;
   const n = session.stepsShown;
   if (n >= q.steps.length) return;
@@ -288,6 +294,7 @@ export function submit(value, choiceEl) {
   const buddy = buddyOf(currentProfile());
   if (session.locked || value === '') return;
   const correct = q.choices ? value === q.answer : Number(value) === Number(q.answer.replace(/,/g, ''));
+  if (session.test) return submitTest(q, value, correct, choiceEl);
 
   if (correct) {
     session.locked = true;
@@ -352,6 +359,26 @@ export function submit(value, choiceEl) {
   if (choiceEl) choiceEl.classList.add('wrong');
   app.querySelectorAll('[data-choice]').forEach((b) => b.dataset.choice === q.answer && b.classList.add('right'));
   app.querySelector('#next').classList.remove('hidden');
+}
+
+// 📝 On a test: one try, and no right or wrong until the end.
+export function submitTest(q, value, correct, choiceEl) {
+  session.locked = true;
+  const answer = q.choices ? q.answer : Number(q.answer).toLocaleString('en-US');
+  const given = q.choices ? value : Number(value).toLocaleString('en-US');
+  const item = { question: q.summary ?? q.prompt, answer, given, right: correct, topicId: q.topicId, level: q.level };
+  session.answers.push(item);
+  recordAnswer(q, correct);
+  if (correct) {
+    session.firstTry++;
+    session.points += q.level;
+  } else session.missed.push(item);
+  choiceEl?.classList.add('picked');
+  app.querySelectorAll('[data-choice]').forEach((b) => (b.disabled = true));
+  setFeedback('saved', '📝 Answer saved');
+  sounds.tap();
+  const s = session;
+  setTimeout(() => session === s && nextQuestion(), 800);
 }
 
 // "How do you know?": pick the explanation that matches the thinking.
@@ -750,12 +777,12 @@ export function startReplay(missed) {
 }
 
 // A short round from a list of { topicId, level }: Try these again, or the daily warm-up.
-export function startQueue(queue, mode) {
+export function startQueue(queue, mode, extra = {}) {
   const p = currentProfile();
   session = {
     mode,
     topic: {
-      id: mode, name: mode === 'warmup' ? 'Warm-up' : 'Try again', emoji: mode === 'warmup' ? '☀️' : '🔁',
+      id: mode, name: { warmup: 'Warm-up', test: 'Unit Test' }[mode] ?? 'Try again', emoji: { warmup: '☀️', test: '📝' }[mode] ?? '🔁',
       gen: (level) => {
         const m = session.queue[session.index];
         return { topicId: m.topicId, ...findTopic(m.topicId).gen(level) };
@@ -765,6 +792,7 @@ export function startQueue(queue, mode) {
     points: 0, byTopic: {}, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
     pool: coreTopics(p.grade), focus: false,
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: true, hinted: 0,
+    ...extra,
   };
   loadQuestion();
 }

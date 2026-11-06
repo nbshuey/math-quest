@@ -65,7 +65,7 @@ export function renderSpeedIntro() {
         ${buddyRow(p, 'Ready, set, go! ⚡')}
         <h2>⚡ Speed Round · ${p.autoLevel ? '🧭 ' : ''}${levelById(topicLevel(p, 'speed')).emoji} ${levelById(topicLevel(p, 'speed')).name}</h2>
         <p class="panel-note">${intro} ${sayButton('intro', 'Read aloud')}</p>
-        <p class="panel-note">A wrong answer just shows the right one and keeps going. Facts you miss come back for practice.</p>
+        <p class="panel-note">No hints and no answers during the round: from memory only! You see the facts you missed at the end, and they come back for practice.</p>
         <div class="levels" role="group" aria-label="How long">${times}</div>
         <p class="panel-note">🪙 1 coin for every right answer, plus ${SPEED_NEW_BEST} for a new best.</p>
       </div>
@@ -184,17 +184,16 @@ export function checkSpeed() {
   s.missed.push(f);
   s.locked = true;
   sounds.wrong();
+  // No answer during the round (it's from memory); the missed facts show at the end.
   fb.className = 'feedback reveal';
-  fb.textContent = '✗ Remember this one!';
-  const el = app.querySelector('#fact');
-  el.textContent = `${f.text} = ${f.answer}`;
-  el.classList.add('missed');
+  fb.textContent = '✗';
+  app.querySelector('#fact').classList.add('missed');
   setTimeout(() => {
     if (speed !== s || !s.running) return;
     s.locked = false;
     fb.textContent = '';
     showFact();
-  }, 1400);
+  }, 600);
 }
 
 export function showFact() {

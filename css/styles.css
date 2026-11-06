@@ -991,3 +991,14 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .geo .geo-label { font-size: 15px; font-weight: 800; fill: var(--ink); }
 .geo .geo-mark, .shape .geo-mark { fill: none; stroke: var(--bad); stroke-width: 2; }
 .shape .geo-fold { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 6 4; }
+
+/* 📝 Unit Tests */
+.test-card { border: 3px solid var(--good); }
+.test-intro .levels { margin-top: 8px; }
+.feedback.saved { color: var(--muted); }
+.choice.picked { outline: 4px solid var(--primary); outline-offset: 2px; }
+.choice:disabled:not(.picked) { opacity: 0.6; }
+.test-row span { text-align: left; }
+.test-row strong { white-space: nowrap; }
+.test-row.no strong s { color: var(--bad); }
+.test-row.ok strong { color: var(--good-dark); }
