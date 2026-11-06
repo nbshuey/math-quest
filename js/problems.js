@@ -927,6 +927,7 @@ const hundredGrid = (h) =>
 /* ------------------------ More grade 2 ------------------------ */
 
 function time(level) {
+  if (level > 1 && Math.random() < 0.2) return amPm();
   const h = rand(1, 12);
   if (level === 3) {
     const m = rand(0, 11) * 5;
@@ -2432,6 +2433,1048 @@ function shapes3(level) {
 /* ---------------------------- Topics ---------------------------- */
 
 export const RIGHT = '👍 Right';
+/* ------------- Howard County curriculum gaps: grade 2 ------------- */
+
+const ONES_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+  'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS_WORDS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+const underHundredName = (n) => (n < 20 ? ONES_WORDS[n] : TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? `-${ONES_WORDS[n % 10]}` : ''));
+// 406 → "four hundred six"
+function numberName(n) {
+  const [h, rest] = [Math.floor(n / 100), n % 100];
+  return [h ? `${ONES_WORDS[h]} hundred` : '', rest || !h ? underHundredName(rest) : ''].filter(Boolean).join(' ');
+}
+
+// A ruler from 0 to `len`, with colored bars above it: [{ from, to, cls }].
+function rulerPic(len, bars) {
+  const gap = len > 10 ? 26 : 32;
+  const x = (i) => 14 + i * gap;
+  const w = x(len) + 14;
+  const top = 8 + bars.length * 24;
+  const shown = bars.map((b, k) => `<rect x="${x(b.from)}" y="${6 + k * 24}" width="${x(b.to) - x(b.from)}" height="16" rx="5" class="ruler-bar ${b.cls ?? ''}"/>
+    <line x1="${x(b.from)}" y1="${22 + k * 24}" x2="${x(b.from)}" y2="${top}" class="ruler-guide"/><line x1="${x(b.to)}" y1="${22 + k * 24}" x2="${x(b.to)}" y2="${top}" class="ruler-guide"/>`).join('');
+  let ticks = '';
+  for (let i = 0; i <= len; i++) {
+    ticks += `<line x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${top + 12}" class="ruler-tick"/><text x="${x(i)}" y="${top + 25}" class="ruler-num">${i}</text>`;
+  }
+  return `<svg class="ruler" viewBox="0 0 ${w} ${top + 34}" style="--w:${w}" aria-hidden="true"><rect x="4" y="${top}" width="${w - 8}" height="32" rx="4" class="ruler-body"/>${ticks}${shown}</svg>`;
+}
+
+// A bar model. Each row is a list of parts { size, label, cls }; `total` goes above.
+const tapePic = (rows, total) => `<div class="tape">${total !== undefined ? `<div class="tape-total"><span>${total}</span></div>` : ''}${rows
+  .map((r) => `<div class="tape-row">${r.name ? `<b class="tape-name">${r.name}</b>` : ''}<div class="tape-parts">${r.parts
+    .map((p) => `<span class="${p.cls ?? ''}" style="flex:${p.size}">${p.label}</span>`).join('')}${r.pad ? `<i style="flex:${r.pad}"></i>` : ''}</div></div>`)
+  .join('')}</div>`;
+
+const ESTIMATES = [
+  { thing: 'a crayon', n: 3, unit: 'inches', other: ['feet', 'yards'] },
+  { thing: 'a pencil', n: 7, unit: 'inches', other: ['feet', 'yards'] },
+  { thing: 'a stapler', n: 6, unit: 'inches', other: ['feet', 'yards'] },
+  { thing: 'a book', n: 10, unit: 'inches', other: ['feet', 'yards'] },
+  { thing: 'a door', n: 7, unit: 'feet', other: ['inches', 'yards'] },
+  { thing: 'a car', n: 15, unit: 'feet', other: ['inches', 'yards'] },
+  { thing: 'a school bus', n: 40, unit: 'feet', other: ['inches', 'yards'] },
+  { thing: 'a paper clip', n: 3, unit: 'centimeters', other: ['meters'] },
+  { thing: 'an eraser', n: 5, unit: 'centimeters', other: ['meters'] },
+  { thing: 'a carrot', n: 15, unit: 'centimeters', other: ['meters'] },
+  { thing: 'a bed', n: 2, unit: 'meters', other: ['centimeters'] },
+  { thing: 'a classroom', n: 10, unit: 'meters', other: ['centimeters'] },
+  { thing: 'a swimming pool', n: 25, unit: 'meters', other: ['centimeters'] },
+];
+const LENGTH_THINGS = ['crayon', 'pencil', 'ribbon', 'worm', 'straw', 'leaf', 'key'];
+
+function estimateLength() {
+  const e = pick(ESTIMATES);
+  const metric = ['centimeters', 'meters'].includes(e.unit);
+  const answer = `${e.n} ${e.unit}`;
+  return {
+    prompt: `About how long is ${e.thing}?`,
+    answer,
+    choices: shuffle([answer, ...e.other.map((u) => `${e.n} ${u}`)]),
+    hint: metric ? 'A centimeter is about as wide as your fingertip. A meter is about one big step.' : 'An inch is about as long as a paper clip. A foot is as long as a big ruler. A yard is about one big step.',
+    steps: [
+      `Picture a real ${e.thing.replace(/^an? /, '')}. Could you hold it in your hand, or is it big?`,
+      metric
+        ? 'A centimeter is about as wide as your fingertip. A meter is about one big step.'
+        : 'An inch is about as long as a paper clip. A foot is as long as a big ruler. A yard is about one big step.',
+      `Which one makes sense for ${e.thing}?`,
+    ],
+    why: why(`${cap(e.thing)} is about ${answer} long.`, [`${cap(e.thing)} is about ${e.n} ${e.other[0]} long.`, 'The bigger unit is always the right one.']),
+    mistake: `${e.n} ${e.other[0]}`,
+    word: true,
+  };
+}
+
+function length2(level) {
+  const unit = pick(['inches', 'centimeters']);
+  const r = Math.random();
+  if (level === 3 && r < 0.3) return estimateLength();
+  if (level === 2 && r < 0.25) return estimateLength();
+  if (level === 3) {
+    // Length word problems: how much longer, or end to end.
+    const [n1, n2] = shuffle(NAMES);
+    const thing = pick(['ribbon', 'string', 'paper chain', 'snake toy']);
+    const a = rand(25, 70);
+    const b = rand(12, a - 6);
+    if (Math.random() < 0.5) {
+      return {
+        prompt: `${n1}'s ${thing} is ${a} ${unit} long. ${n2}'s ${thing} is ${b} ${unit} long. How much longer is ${n1}'s ${thing}?`,
+        answer: String(a - b),
+        hint: '"How much longer" means find the difference.',
+        steps: [
+          withPic('"How much longer" means compare. Find the difference.', tapePic([{ name: n1, parts: [{ size: a, label: a }] }, { name: n2, parts: [{ size: b, label: b }, { size: a - b, label: '?', cls: 'q gap' }] }])),
+          `Take away the shorter from the longer: ${a} − ${b}.`,
+          `Or count up from ${b} to ${a}. How far is it?`,
+        ],
+        why: why(`${a} − ${b} = ${a - b}, so it's ${a - b} ${unit} longer.`, [`Add the lengths: ${a} + ${b} = ${a + b}.`, `${n1}'s ${thing} is ${a}, so it's ${a} ${unit} longer.`]),
+        mistake: a + b,
+        word: true,
+      };
+    }
+    return {
+      prompt: `${n1} has a ${thing} that is ${a} ${unit} long and another that is ${b} ${unit} long. ${n1} lays them end to end. How long are they together?`,
+      answer: String(a + b),
+      hint: 'End to end means put the lengths together: add.',
+      steps: [
+        withPic('End to end means one starts where the other stops. Put the lengths together.', tapePic([{ parts: [{ size: a, label: a }, { size: b, label: b }] }], '?')),
+        `Add: ${a} + ${b}.`,
+        'Add the ones first, then the tens. What do you get?',
+      ],
+      why: why(`${a} + ${b} = ${a + b} ${unit}.`, [`Take away: ${a} − ${b} = ${a - b}.`, `Just use the longer one: ${a}.`]),
+      mistake: a - b,
+      word: true,
+    };
+  }
+  const thing = pick(LENGTH_THINGS);
+  if (level === 2 && r < 0.55) {
+    // How much longer, read from the ruler.
+    const other = pick(LENGTH_THINGS.filter((t) => t !== thing));
+    const a = rand(5, 11);
+    const b = rand(2, a - 2);
+    return {
+      prompt: `How much longer is the ${thing} than the ${other}? (in ${unit})`,
+      visual: rulerPic(12, [{ from: 0, to: a }, { from: 0, to: b, cls: 'b2' }]),
+      summary: `${thing} ${a} ${unit}, ${other} ${b} ${unit}`,
+      spoken: `The ${thing} is on top. The ${other} is under it.`,
+      answer: String(a - b),
+      hint: 'Find where each one ends. Then find the difference.',
+      steps: [
+        `The ${thing} is on top. Where does it end on the ruler?`,
+        `The ${other} is under it. Where does it end?`,
+        'Count the jumps from the shorter end to the longer end, or take away.',
+      ],
+      why: why(`The ${thing} is ${a} and the ${other} is ${b}: ${a} − ${b} = ${a - b} ${unit} longer.`, [
+        `The ${thing} ends at ${a}, so it's ${a} longer.`,
+        `Add them: ${a} + ${b} = ${a + b}.`,
+      ]),
+      mistake: a,
+    };
+  }
+  const start = level === 1 ? 0 : rand(1, 4);
+  const len = rand(2, level === 1 ? 10 : 12 - start - 1);
+  return {
+    prompt: `How long is the ${thing}? (in ${unit})`,
+    visual: rulerPic(12, [{ from: start, to: start + len }]),
+    summary: `A ${thing} from ${start} to ${start + len} on a ruler`,
+    spoken: '',
+    answer: String(len),
+    hint: start ? `The ${thing} doesn't start at 0! Count the jumps from ${start}.` : 'Line up the start at 0, then read the number at the end.',
+    steps: start
+      ? [`Look at the left end. It starts at ${start}, not 0!`, `Look at the right end. It stops at ${start + len}.`, `Count the jumps from ${start} to ${start + len}, or take away: ${start + len} − ${start}.`]
+      : ['Look at the left end. It starts at 0.', 'Follow the right end straight down to the ruler.', 'What number is it on? That is how long it is.'],
+    why: start
+      ? why(`It goes from ${start} to ${start + len}: ${start + len} − ${start} = ${len} ${unit}.`, [`It ends at ${start + len}, so it's ${start + len} ${unit}.`, 'Count the lines, including the first one.'])
+      : why(`It starts at 0 and ends at ${len}, so it's ${len} ${unit} long.`, [`Count every line, including 0: ${len + 1}.`, 'Rulers start at 1, so take 1 away.']),
+    mistake: start ? start + len : len + 1,
+  };
+}
+
+// Word problems with the missing number in different places (2.OA.1).
+function wordProblems2(level) {
+  const [n1, n2] = shuffle(NAMES);
+  const item = pick(ITEMS);
+  const big = level > 1;
+  const kinds = { 1: ['change', 'start', 'compare'], 2: ['change', 'start', 'compare', 'more'], 3: ['change', 'start', 'compare', 'more', 'two', 'two'] }[level];
+  const kind = pick(kinds);
+  if (kind === 'change') {
+    const a = big ? rand(12, 60) : rand(3, 11);
+    const b = big ? rand(6, 99 - a) : rand(2, 20 - a);
+    const c = a + b;
+    return {
+      prompt: `${n1} had ${a} ${item}. ${n1} got some more. Now ${n1} has ${c} ${item}. How many ${item} did ${n1} get?`,
+      answer: String(b),
+      hint: `Think: ${a} + ? = ${c}`,
+      steps: [
+        withPic(`We know the start (${a}) and the end (${c}). The missing part is how many ${n1} got.`, tapePic([{ parts: [{ size: a, label: a }, { size: b, label: '?', cls: 'q' }] }], c)),
+        `Write it with a box: ${a} + ? = ${c}.`,
+        `Count up from ${a} to ${c}, or take away: ${c} − ${a}.`,
+      ],
+      why: why(`${a} + ${b} = ${c}, so ${n1} got ${b}.`, [`"More" means add: ${a} + ${c} = ${a + c}.`, `${n1} has ${c} now, so ${n1} got ${c}.`]),
+      mistake: a + c,
+      word: true,
+    };
+  }
+  if (kind === 'start') {
+    let left, gave;
+    do {
+      left = big ? rand(10, 50) : rand(2, 9);
+      gave = big ? rand(6, 45) : rand(2, 9);
+    } while (left === gave || left + gave > (big ? 99 : 20));
+    const s = left + gave;
+    return {
+      prompt: `${n1} had some ${item}. ${n1} gave ${gave} to ${n2}. Now ${n1} has ${left} ${item} left. How many ${item} did ${n1} have at the start?`,
+      answer: String(s),
+      hint: `${n1} gave some away, so ${n1} had more at the start. Put them back!`,
+      steps: [
+        withPic(`The start is missing. ${n1} gave some away, so ${n1} had MORE at the start.`, tapePic([{ parts: [{ size: left, label: left }, { size: gave, label: gave, cls: 'gone' }] }], '?')),
+        `Write it with a box: ? − ${gave} = ${left}.`,
+        `Put back the ones ${n1} gave away: ${left} + ${gave}.`,
+      ],
+      why: why(`${left} + ${gave} = ${s}. Check: ${s} − ${gave} = ${left}.`, [
+        `Take away again: ${Math.max(left, gave)} − ${Math.min(left, gave)} = ${Math.abs(left - gave)}.`,
+        `${n1} has ${left} now, so ${n1} had ${left} at the start.`,
+      ]),
+      mistake: Math.abs(left - gave),
+      word: true,
+    };
+  }
+  if (kind === 'compare') {
+    const small = big ? rand(10, 60) : rand(2, 10);
+    const diff = big ? rand(5, 99 - small) : rand(2, 20 - small);
+    const large = small + diff;
+    const fewer = Math.random() < 0.4;
+    return {
+      prompt: fewer
+        ? `${n1} has ${large} ${item}. ${n2} has ${small} ${item}. How many fewer ${item} does ${n2} have than ${n1}?`
+        : `${n1} has ${large} ${item}. ${n2} has ${small} ${item}. How many more ${item} does ${n1} have than ${n2}?`,
+      answer: String(diff),
+      hint: `Compare: find the difference between ${large} and ${small}.`,
+      steps: [
+        withPic('Line them up to compare. The extra part is the answer.', tapePic([{ name: n1, parts: [{ size: large, label: large }] }, { name: n2, parts: [{ size: small, label: small }, { size: diff, label: '?', cls: 'q gap' }] }])),
+        `Find the difference: ${large} − ${small}.`,
+        `Or count up from ${small} to ${large}. How far is it?`,
+      ],
+      why: why(`${large} − ${small} = ${diff}.`, [`"${fewer ? 'Fewer' : 'More'}" is a clue to add: ${large} + ${small} = ${large + small}.`, `${n1} has ${large}, so the answer is ${large}.`]),
+      mistake: large + small,
+      word: true,
+    };
+  }
+  if (kind === 'more') {
+    let s, d;
+    do {
+      s = rand(15, 60);
+      d = rand(6, 30);
+    } while (s === d);
+    const less = Math.random() < 0.4 && s > d;
+    const answer = less ? s - d : s + d;
+    return {
+      prompt: `${n1} has ${s} ${item}. ${n2} has ${d} ${less ? 'fewer' : 'more'} ${item} than ${n1}. How many ${item} does ${n2} have?`,
+      answer: String(answer),
+      hint: less ? `${n2} has fewer, so take away.` : `${n2} has the same as ${n1}, plus ${d} more.`,
+      steps: [
+        withPic(less ? `${n2} has the same as ${n1}, but ${d} fewer.` : `${n2} has the same as ${n1}, plus ${d} more.`, tapePic(less
+          ? [{ name: n1, parts: [{ size: s, label: s }] }, { name: n2, parts: [{ size: s - d, label: '?', cls: 'q' }, { size: d, label: `${d} fewer`, cls: 'gap gone' }] }]
+          : [{ name: n1, parts: [{ size: s, label: s }], pad: d }, { name: n2, parts: [{ size: s, label: s }, { size: d, label: d }] }])),
+        less ? `So take away: ${s} − ${d}.` : `So add: ${s} + ${d}.`,
+        less ? 'Subtract the ones first, then the tens. What do you get?' : 'Add the ones first, then the tens. What do you get?',
+      ],
+      why: why(less ? `${s} − ${d} = ${answer}.` : `${s} + ${d} = ${answer}.`, [
+        less ? `"Fewer" means add: ${s} + ${d} = ${s + d}.` : `Take away: ${Math.max(s, d)} − ${Math.min(s, d)} = ${Math.abs(s - d)}.`,
+        `${n2} has ${d}, because that's the number with ${n2}.`,
+      ]),
+      mistake: less ? s + d : Math.abs(s - d),
+      word: true,
+    };
+  }
+  // Two steps.
+  const a = rand(30, 70);
+  const b = rand(6, a - 10);
+  const c = rand(5, 99 - (a - b));
+  const answer = a - b + c;
+  const [place, took, added] = pick([
+    ['on the bookshelf', `Kids took out ${b} books`, `the teacher put ${c} more books on the shelf`],
+    ['on the bus', `${b} people got off`, `${c} people got on`],
+    ['in the tank', `${b} fish were moved to a new tank`, `the pet store added ${c} new fish`],
+  ]);
+  const what = { 'on the bookshelf': 'books', 'on the bus': 'people', 'in the tank': 'fish' }[place];
+  return {
+    prompt: `There were ${a} ${what} ${place}. ${took}. Then ${added}. How many ${what} are ${place} now?`,
+    answer: String(answer),
+    hint: 'Two steps! First take away, then add.',
+    steps: [
+      `Step 1: some went away, so take away: ${a} − ${b}.`,
+      `Step 2: more came, so add ${c} to your step 1 answer.`,
+      'Work it out one step at a time. What do you get?',
+    ],
+    why: why(`${a} − ${b} = ${a - b}, then ${a - b} + ${c} = ${answer}.`, [`Only do step 1: ${a} − ${b} = ${a - b}.`, `Add all three: ${a} + ${b} + ${c} = ${a + b + c}.`]),
+    mistake: a - b,
+    word: true,
+  };
+}
+
+function tenHundred(level) {
+  const step = level === 1 ? 10 : pick([10, 100]);
+  const up = Math.random() < 0.5;
+  let n;
+  do n = rand(110, 890);
+  while ((step === 100 && !up && n < 200) || (level === 1 && (up ? Math.floor(n / 10) % 10 === 9 : Math.floor(n / 10) % 10 === 0)));
+  const answer = up ? n + step : n - step;
+  const [h, t] = [Math.floor(n / 100), Math.floor(n / 10) % 10];
+  const op = up ? '+' : '−';
+  const cross = step === 10 && (up ? t === 9 : t === 0);
+  const steps = step === 10
+    ? [
+        `${up ? 'Adding' : 'Taking away'} 10 changes the tens place. The ones stay the same.`,
+        withPic(
+          cross
+            ? up ? `${n} has 9 tens. One more ten makes 10 tens: a new hundred!` : `${n} has 0 tens, so take 1 hundred and break it into 10 tens.`
+            : `${n} has ${t} tens. ${up ? 'One more' : 'One less'} ten makes ${up ? t + 1 : t - 1} tens.`,
+          hopsPic(n, up ? 10 : -10, 1),
+        ),
+        'Write the new number. Keep the ones digit the same!',
+      ]
+    : [
+        `${up ? 'Adding' : 'Taking away'} 100 changes the hundreds place. The tens and ones stay the same.`,
+        withPic(`${n} has ${h} hundreds. ${up ? 'One more' : 'One less'} hundred makes ${up ? h + 1 : h - 1} hundreds.`, hopsPic(n, up ? 100 : -100, 1)),
+        'Write the new number. Keep the tens and ones the same!',
+      ];
+  return {
+    prompt: `${n} ${op} ${step} = ?`,
+    answer: String(answer),
+    hint: step === 10 ? 'Only the tens digit changes (unless it crosses a hundred).' : 'Only the hundreds digit changes.',
+    steps,
+    why: why(`Only the ${step === 10 ? 'tens' : 'hundreds'} place changes: ${n} ${op} ${step} = ${answer}.`, [
+      step === 10 ? `Only the ones change: ${up ? n + 1 : n - 1}.` : `Only the tens change: ${up ? n + 10 : n - 10}.`,
+      'Every digit goes up or down by 1.',
+    ]),
+    mistake: step === 10 ? (up ? n + 1 : n - 1) : (up ? n + 10 : n - 10),
+  };
+}
+
+function placeForms() {
+  const r = Math.random();
+  if (r < 0.35) {
+    // Expanded form.
+    const [h, t, o] = distinctDigits(3);
+    const n = h * 100 + t * 10 + o;
+    const exp = (parts) => parts.filter(Boolean).join(' + ');
+    const answer = exp([h * 100, t * 10, o]);
+    const choices = [...new Set([answer, exp([h, t, o]), exp([h * 100, o * 10, t]), exp([h * 10, t * 10, o])])].slice(0, 3);
+    return {
+      prompt: `Which is ${n} in expanded form?`,
+      answer,
+      choices: shuffle(choices),
+      hint: 'Expanded form shows what each digit is worth.',
+      steps: [
+        'Expanded form shows what each digit is worth, joined with +.',
+        `The ${h} is in the hundreds place, so it's worth ${h * 100}.`,
+        'Do the same for the tens and the ones. Which choice matches?',
+      ],
+      why: why(`${n} is ${h} hundreds, ${t} tens and ${o} ones: ${answer}.`, [`Just split up the digits: ${exp([h, t, o])}.`, 'The digits can go in any order.']),
+      mistake: exp([h, t, o]),
+    };
+  }
+  // Number names, both ways. Sometimes with a 0 in the middle or at the end.
+  const h = rand(1, 9);
+  const zero = pick(['tens', 'ones', '']);
+  const t = zero === 'tens' ? 0 : rand(1, 9);
+  const o = zero === 'ones' ? 0 : rand(1, 9);
+  const n = h * 100 + t * 10 + o;
+  const swapped = h * 100 + o * 10 + t;
+  const name = numberName(n);
+  if (r < 0.7) {
+    const choices = [n, swapped, h * 1000 + t * 10 + o].map((x) => fmt(x));
+    const answer = fmt(n);
+    return {
+      prompt: `Which number is "${name}"?`,
+      answer,
+      choices: shuffle([...new Set(choices)].slice(0, 3)),
+      hint: 'The hundreds word tells the first digit. Then the tens, then the ones.',
+      steps: [
+        `"${ONES_WORDS[h]} hundred" means a ${h} in the hundreds place.`,
+        t === 0 ? 'There is no tens word, so write a 0 to hold the tens place.' : `Then "${underHundredName(t * 10 + o)}" goes in the tens and ones.`,
+        'Put the digits together. Which choice matches?',
+      ],
+      why: why(`${name}: ${h} hundreds, ${t} tens, ${o} ones.`, [`Write each word's number in a row: ${h}100${t * 10 + o}.`, 'The tens and ones can swap places.']),
+      mistake: fmt(swapped === n ? h * 1000 + t * 10 + o : swapped),
+      word: true,
+    };
+  }
+  const answer = name;
+  const choices = [...new Set([name, numberName(swapped), numberName(h * 100 + t), numberName(h * 10 + t)])];
+  return {
+    prompt: `How do you write ${n} in words?`,
+    answer,
+    choices: shuffle(choices.slice(0, 3)),
+    hint: 'Say the hundreds first, then the rest of the number.',
+    steps: [
+      `Start with the hundreds: the ${h} means ${ONES_WORDS[h]} hundred.`,
+      o === 0 && t === 0 ? 'No tens or ones, so stop there.' : `Then say the last two digits, ${t * 10 + o}, like a normal number.`,
+      'Which choice says both parts?',
+    ],
+    why: why(`${n} is ${ONES_WORDS[h]} hundred and then ${t * 10 + o}: ${name}.`, ['Read the digits backwards.', `Skip the hundreds: ${numberName(t * 10 + o)}.`]),
+    mistake: choices.find((c) => c !== name),
+    word: true,
+  };
+}
+
+function addMany() {
+  const k = pick([3, 4]);
+  const nums = Array.from({ length: k }, () => rand(11, 49));
+  const sum = nums.reduce((a, b) => a + b, 0);
+  const tens = nums.map((x) => x - (x % 10));
+  const ones = nums.map((x) => x % 10);
+  const [tensSum, onesSum] = [tens.reduce((a, b) => a + b, 0), ones.reduce((a, b) => a + b, 0)];
+  const mistake = onesSum >= 10 ? tensSum + (onesSum % 10) : sum - nums[k - 1];
+  return {
+    prompt: `${nums.join(' + ')} = ?`,
+    answer: String(sum),
+    hint: 'Add all the tens. Add all the ones. Then put them together.',
+    steps: [
+      `Add the tens: ${tens.join(' + ')}.`,
+      `Add the ones: ${ones.join(' + ')}. Look for pairs that make 10!`,
+      'Put the tens total and the ones total together.',
+    ],
+    why: why(`Tens: ${tensSum}. Ones: ${onesSum}. ${tensSum} + ${onesSum} = ${sum}.`, [
+      `Add only the first two: ${nums[0]} + ${nums[1]} = ${nums[0] + nums[1]}.`,
+      onesSum >= 10 ? `The ones make ${onesSum}, but just write the ${onesSum % 10}.` : 'Add all the digits together.',
+    ]),
+    mistake,
+  };
+}
+
+function mentalMath2(level) {
+  const r = Math.random();
+  if (level === 3 && r < 0.4) return addMany();
+  if (level >= 2 && r < (level === 2 ? 0.4 : 0.75)) return placeForms();
+  return tenHundred(level);
+}
+
+const DAY_THINGS = [
+  ['eat breakfast', 7, true], ['get on the school bus', 8, true], ['see the sunrise', 6, true], ['eat a morning snack', 10, true],
+  ['eat lunch', 12, false], ['play after school', 4, false], ['eat dinner', 6, false], ['go to bed', 8, false], ['see the stars', 9, false],
+];
+
+function amPm() {
+  const [what, h, am] = pick(DAY_THINGS);
+  const t = clockTime(h, pick([0, 15, 30]));
+  const answer = `${t} ${am ? 'a.m.' : 'p.m.'}`;
+  const wrong = `${t} ${am ? 'p.m.' : 'a.m.'}`;
+  return {
+    prompt: `Which time makes the most sense to ${what}?`,
+    answer,
+    choices: [`${t} a.m.`, `${t} p.m.`],
+    hint: 'a.m. is from midnight to noon. p.m. is from noon to midnight.',
+    steps: [
+      'a.m. times go from midnight until noon: night and morning.',
+      'p.m. times go from noon until midnight: afternoon and evening.',
+      `When do you usually ${what}?`,
+    ],
+    why: why(`People usually ${what} in the ${am ? 'morning' : h === 12 ? 'middle of the day' : 'afternoon or evening'}, so it's ${answer}.`, [
+      'a.m. means after lunch.',
+      'It doesn\'t matter. a.m. and p.m. are the same time.',
+    ]),
+    mistake: wrong,
+    word: true,
+  };
+}
+
+/* ------------- Howard County curriculum gaps: grade 4 ------------- */
+
+// "Times as many" (4.OA.1, 4.OA.2), and telling it apart from "more than".
+function timesAsMany(level) {
+  const [n1, n2] = shuffle(NAMES);
+  const item = pick(ITEMS);
+  const r = Math.random();
+  if (level === 1 && r < 0.35) {
+    let a, b;
+    do { a = rand(3, 9); b = rand(2, 9); } while (a === b);
+    const p = a * b;
+    const answer = `${p} is ${a} times as many as ${b}.`;
+    const plus = `${p} is ${a} more than ${b}.`;
+    return {
+      prompt: `Which sentence means ${p} = ${a} × ${b}?`,
+      answer,
+      choices: shuffle([answer, plus, `${b} is ${a} times as many as ${p}.`]),
+      hint: 'Times means equal groups, not adding on.',
+      steps: [
+        'In a times equation, the number by itself is the total.',
+        `${p} is the biggest number, so it goes first in the sentence.`,
+        '× means groups, not adding on. Which sentence says that?',
+      ],
+      why: why(`${a} × ${b} = ${p} means ${p} is ${a} groups of ${b}.`, [`× means add on, so ${p} is ${a} more than ${b}.`, 'The smaller number always goes first.']),
+      mistake: plus,
+      word: true,
+    };
+  }
+  const kind = level === 1 ? 'bigger' : pick(level === 2 ? ['bigger', 'smaller', 'smaller'] : ['bigger', 'smaller', 'howmany', 'more']);
+  let s, k;
+  do {
+    s = level === 1 ? rand(2, 9) : rand(3, 12);
+    k = level === 1 ? rand(2, 5) : rand(3, 9);
+  } while (s * k === s + k || s * k - k === s || s === k);
+  const p = s * k;
+  const row = (name, n, label) => ({ name, parts: Array.from({ length: n }, () => ({ size: 1, label })) });
+  if (kind === 'bigger') {
+    return {
+      prompt: `${n1} has ${s} ${item}. ${n2} has ${k} times as many ${item} as ${n1}. How many ${item} does ${n2} have?`,
+      answer: String(p),
+      hint: `${k} times as many means ${k} groups the size of ${n1}'s.`,
+      steps: [
+        withPic(`${k} times as many means ${k} groups the size of ${n1}'s.`, tapePic([{ ...row(n1, 1, s), pad: k - 1 }, row(n2, k, s)])),
+        `Write it: ${k} × ${s} = ?`,
+        `Use your times facts. What is ${k} groups of ${s}?`,
+      ],
+      why: why(`${k} × ${s} = ${p}.`, [`"Times as many" means add: ${s} + ${k} = ${s + k}.`, `${n2} has ${k}, the number next to "times".`]),
+      mistake: s + k,
+      word: true,
+    };
+  }
+  if (kind === 'smaller') {
+    return {
+      prompt: `${n1} has ${p} ${item}. That is ${k} times as many as ${n2} has. How many ${item} does ${n2} have?`,
+      answer: String(s),
+      hint: `${n1}'s ${item} make ${k} equal groups. Each group is ${n2}'s amount.`,
+      steps: [
+        withPic(`${n1}'s ${p} ${item} make ${k} equal groups. One group is ${n2}'s amount.`, tapePic([row(n1, k, '?'), { ...row(n2, 1, '?'), pad: k - 1 }], p)),
+        `Write it: ${k} × ? = ${p}.`,
+        `Think division: ${p} ÷ ${k}.`,
+      ],
+      why: why(`${p} ÷ ${k} = ${s}. Check: ${k} × ${s} = ${p}.`, [`Take away: ${p} − ${k} = ${p - k}.`, `Multiply: ${p} × ${k} = ${p * k}.`]),
+      mistake: p - k,
+      word: true,
+    };
+  }
+  if (kind === 'howmany') {
+    return {
+      prompt: `${n1} has ${p} ${item}. ${n2} has ${s} ${item}. How many times as many ${item} does ${n1} have?`,
+      answer: String(k),
+      hint: `How many groups of ${s} fit in ${p}?`,
+      steps: [
+        `"How many times as many" asks how many groups of ${s} make ${p}.`,
+        `Write it: ? × ${s} = ${p}.`,
+        `Think division: ${p} ÷ ${s}.`,
+      ],
+      why: why(`${k} × ${s} = ${p}, so ${n1} has ${k} times as many.`, [`Take away: ${p} − ${s} = ${p - s}.`, `Add: ${p} + ${s} = ${p + s}.`]),
+      mistake: p - s,
+      word: true,
+    };
+  }
+  // "More than" sounds like "times as many", but it's adding.
+  return {
+    prompt: `${n1} has ${s} ${item}. ${n2} has ${k} more ${item} than ${n1}. How many ${item} does ${n2} have?`,
+    answer: String(s + k),
+    hint: 'Careful! "More than" means add. "Times as many" means multiply.',
+    steps: [
+      'Read carefully: does it say "times as many" or "more than"?',
+      `"${k} more than" means the same as ${n1}, plus ${k}.`,
+      `So add: ${s} + ${k}.`,
+    ],
+    why: why(`"More than" means add: ${s} + ${k} = ${s + k}.`, [`It's a times problem: ${k} × ${s} = ${p}.`, `${n2} has ${k}.`]),
+    mistake: p,
+    word: true,
+  };
+}
+
+// Multi-step word problems, including what to do with a remainder (4.OA.3).
+function multiStep4(level) {
+  const [n1, n2] = shuffle(NAMES);
+  if (level === 1 || (level === 3 && Math.random() < 0.3)) {
+    const a = rand(3, 9);
+    const b = rand(4, 12);
+    const c = rand(3, Math.floor((a * b) / 2));
+    const give = Math.random() < 0.6;
+    const answer = give ? a * b - c : a * b + c;
+    return {
+      prompt: give
+        ? `${n1} buys ${a} packs of stickers. Each pack has ${b} stickers. Then ${n1} gives ${c} stickers to ${n2}. How many stickers does ${n1} have now?`
+        : `${n1} buys ${a} packs of stickers. Each pack has ${b} stickers. Then ${n2} gives ${n1} ${c} more stickers. How many stickers does ${n1} have now?`,
+      answer: String(answer),
+      hint: 'Two steps! First find how many in all the packs.',
+      steps: [
+        `Step 1: how many stickers in the packs? ${a} × ${b}.`,
+        give ? `Step 2: ${n1} gives some away, so take away ${c} from that.` : `Step 2: ${n1} gets more, so add ${c} to that.`,
+        'Work it out one step at a time. What do you get?',
+      ],
+      why: why(`${a} × ${b} = ${a * b}, then ${a * b} ${give ? '−' : '+'} ${c} = ${answer}.`, [
+        `Only step 1: ${a} × ${b} = ${a * b}.`,
+        `Add all the numbers: ${a} + ${b} + ${c} = ${a + b + c}.`,
+      ]),
+      mistake: a * b,
+      word: true,
+    };
+  }
+  if (level === 2 || Math.random() < 0.5) {
+    const d = rand(3, 9);
+    let q, rem;
+    do {
+      q = level === 2 ? rand(3, 12) : rand(10, 30);
+      rem = rand(1, d - 1);
+    } while (q === rem || q + 1 === rem);
+    const n = d * q + rem;
+    const kind = pick(['up', 'down', 'left']);
+    const story = {
+      up: [`${n} kids are going on a field trip. Each van holds ${d} kids. How many vans are needed so every kid gets a ride?`, q + 1, q,
+        `The ${rem} leftover kids still need a ride. They need one more van!`, `${q} vans hold ${d * q} kids, and ${rem} more still need a van: ${q + 1}.`, `${q} vans, because the remainder doesn't count.`],
+      down: [`${n} cookies are packed in boxes of ${d}. How many boxes can be filled all the way?`, q, q + 1,
+        `The ${rem} leftover cookies can't fill a whole box, so don't count them.`, `${q} boxes are full, and ${rem} cookies are left over.`, `${q + 1} boxes, because you always round up.`],
+      left: [`${n2} shares ${n} stickers equally with ${d} friends. How many stickers are left over?`, rem, q,
+        'This time the question asks for the leftovers. That\'s the remainder!', `${d} × ${q} = ${d * q}, and ${rem} are left over.`, `${q} are left, the answer to the division.`],
+    }[kind];
+    const [prompt, answer, mistake, tip, right, wrong] = story;
+    return {
+      prompt,
+      answer: String(answer),
+      hint: 'Divide, then think: what does the remainder mean here?',
+      steps: [
+        `Divide: ${n} ÷ ${d}. How many full groups of ${d}, and how many left over?`,
+        `Check: ${d} × ${q} = ${d * q}. That leaves ${n} − ${d * q}.`,
+        `${tip} What's the answer?`,
+      ],
+      why: why(right, [wrong, `${n} − ${d} = ${n - d}.`]),
+      mistake,
+      word: true,
+    };
+  }
+  // Three steps.
+  const boxes = rand(4, 9);
+  const per = pick([12, 15, 20, 24, 25]);
+  const classes = rand(3, 6);
+  const total = boxes * per;
+  const each = rand(5, Math.floor((total - 5) / classes));
+  const answer = total - each * classes;
+  return {
+    prompt: `A school buys ${boxes} boxes of pencils with ${per} pencils in each box. Each of ${classes} classes gets ${each} pencils. How many pencils are left?`,
+    answer: String(answer),
+    hint: 'Three steps: pencils in all, pencils given out, then take away.',
+    steps: [
+      `Step 1: pencils in all: ${boxes} × ${per}.`,
+      `Step 2: pencils given out: ${classes} × ${each}.`,
+      'Step 3: take the pencils given out away from all the pencils.',
+    ],
+    why: why(`${boxes} × ${per} = ${total}. ${classes} × ${each} = ${each * classes}. ${total} − ${each * classes} = ${answer}.`, [
+      `${total} − ${each} = ${total - each}.`,
+      `Add it all up: ${boxes} + ${per} + ${classes} + ${each} = ${boxes + per + classes + each}.`,
+    ]),
+    mistake: total - each,
+    word: true,
+  };
+}
+
+const PATTERN_SHAPES = [['🔺', 'triangle'], ['🟦', 'square'], ['🟢', 'circle'], ['⭐', 'star']];
+
+// Number and shape patterns (4.OA.5).
+function patterns4(level) {
+  const r = Math.random();
+  if (level === 3 && r < 0.3) {
+    const a = rand(1, 20);
+    const s = rand(2, 9);
+    const seq = [0, 1, 2, 3].map((i) => a + i * s);
+    const answer = s % 2 ? 'They switch: odd, even, odd…' : a % 2 ? 'Always odd' : 'Always even';
+    const choices = ['Always odd', 'Always even', 'They switch: odd, even, odd…'];
+    return {
+      prompt: `A pattern starts at ${a} and adds ${s} each time. Will the numbers be odd, even, or switch back and forth?`,
+      answer,
+      choices,
+      hint: 'Write the first few numbers and look at each one.',
+      steps: [
+        `Write the first few numbers: ${seq.join(', ')}.`,
+        `Is ${a} odd or even? Is ${s} odd or even?`,
+        'Adding an even number keeps odd as odd and even as even. Adding an odd number flips it.',
+      ],
+      why: s % 2
+        ? why(`${s} is odd, and adding an odd number flips odd to even and back again.`, [`${a} is ${a % 2 ? 'odd' : 'even'}, so they all are.`, 'Patterns that add are always even.'])
+        : why(`${s} is even, so adding it keeps every number ${a % 2 ? 'odd' : 'even'}, like ${a}.`, ['Adding always flips odd and even.', 'The numbers get bigger, so they must switch.']),
+      mistake: choices.find((c) => c !== answer),
+      word: true,
+    };
+  }
+  if (level === 3 && r < 0.6) {
+    const k = pick([3, 4]);
+    const unit = shuffle(PATTERN_SHAPES).slice(0, k);
+    const n = rand(13, 30);
+    const [shape, word] = unit[(n - 1) % k];
+    const label = ([e, w]) => `${e} ${w}`;
+    const rem = n % k;
+    return {
+      prompt: `This pattern keeps repeating: ${unit.map((u) => u[0]).join(' ')} ${unit.map((u) => u[0]).join(' ')} … What is shape number ${n}?`,
+      spoken: `The pattern is ${unit.map((u) => u[1]).join(', ')}, then it starts again.`,
+      answer: label([shape, word]),
+      choices: unit.map(label),
+      hint: `The pattern repeats every ${k} shapes. Divide ${n} by ${k}.`,
+      steps: [
+        `The pattern repeats every ${k} shapes.`,
+        `Divide: ${n} ÷ ${k} is ${Math.floor(n / k)} R${rem}. That's ${Math.floor(n / k)} full groups.`,
+        rem ? `The remainder is ${rem}, so count ${rem} into the next group.` : 'No remainder, so it lands on the last shape of a group.',
+      ],
+      why: why(`${n} ÷ ${k} is ${Math.floor(n / k)} R${rem}, so it's shape ${rem || k} in the group.`, ['It\'s always the first shape.', `Count ${n} shapes from the end.`]),
+      mistake: label(unit[n % k]),
+      word: true,
+    };
+  }
+  if (level >= 2 && r < 0.6) {
+    let a, s;
+    do { a = rand(2, 15); s = rand(3, 12); } while (a === s);
+    const n = rand(5, 10);
+    const answer = a + (n - 1) * s;
+    return {
+      prompt: `A pattern starts at ${a}. The rule is "add ${s}." What is the ${n}th number in the pattern?`,
+      answer: String(answer),
+      hint: `From the 1st to the ${n}th number is ${n - 1} jumps of ${s}.`,
+      steps: [
+        `Write the first few: ${a}, ${a + s}, ${a + 2 * s}…`,
+        `Keep adding ${s}, and count the numbers as you go. Stop at the ${n}th one.`,
+        `Or think: from the 1st to the ${n}th number is ${n - 1} jumps of ${s}.`,
+      ],
+      why: why(`${n - 1} jumps of ${s} from ${a}: ${a} + ${(n - 1) * s} = ${answer}.`, [`${n} jumps of ${s}: ${a + n * s}.`, `Just multiply: ${n} × ${s} = ${n * s}.`]),
+      mistake: a + n * s,
+      word: true,
+    };
+  }
+  const times = level >= 2 && Math.random() < 0.4;
+  const s = times ? pick([2, 3]) : rand(2, level === 1 ? 9 : 25);
+  const a = times ? rand(1, 5) : rand(1, 30);
+  const seq = Array.from({ length: 5 }, (_, i) => (times ? a * s ** i : a + i * s));
+  const last = seq[3];
+  if (!times && Math.random() < 0.4) {
+    const answer = `Add ${s}`;
+    return {
+      prompt: `What is the rule? ${seq.join(', ')}`,
+      answer,
+      choices: shuffle([answer, `Add ${s + 1}`, `Multiply by ${s}`]),
+      hint: 'How far apart is each number from the one before?',
+      steps: ['Look at the first two numbers. How far apart are they?', 'Check the next pair too. Is the jump the same?', 'Which rule makes every jump?'],
+      why: why(`Each number is ${s} more than the one before.`, [`Each number is ${s + 1} more than the one before.`, `Each number is ${s} times the one before.`]),
+      mistake: `Add ${s + 1}`,
+    };
+  }
+  return {
+    prompt: `What comes next? ${seq.slice(0, 4).join(', ')}, __`,
+    answer: String(seq[4]),
+    hint: times ? 'These grow faster and faster. Try multiplying!' : 'Find the jump between two numbers next to each other.',
+    steps: times
+      ? ['These grow faster and faster, so the jump isn\'t the same each time.', `Try dividing: ${seq[1]} ÷ ${seq[0]} is ${s}. Check the next pair too.`, `So multiply the last number: ${last} × ${s}.`]
+      : [`Look at two numbers next to each other: ${seq[0]} and ${seq[1]}.`, `The jump is ${s}. Check: is it the same for the next pair?`, `Use the rule on the last number: ${last} + ${s}.`],
+    why: times
+      ? why(`Each number is ${s} times the one before: ${last} × ${s} = ${seq[4]}.`, [`Add the last jump again: ${last} + ${last - seq[2]} = ${last * 2 - seq[2]}.`, `Add ${s}: ${last + s}.`])
+      : why(`The rule is add ${s}: ${last} + ${s} = ${seq[4]}.`, [`The rule is add 1: ${last + 1}.`, `The rule is add ${s * 2}: ${last + s * 2}.`]),
+    mistake: times ? last * 2 - seq[2] : last + 1,
+  };
+}
+
+// Fractions × whole numbers, mixed numbers, and tenths + hundredths (4.NF.3–5).
+function moreFractions(level) {
+  const r = Math.random();
+  if (level === 1 || (level === 2 && r < 0.3)) {
+    const d = pick([3, 4, 5, 6, 8, 10]);
+    const a = rand(1, Math.min(3, d - 1));
+    let n;
+    do n = rand(2, 5); while (n === 2 && a === 2);
+    const answer = `${n * a}/${d}`;
+    const word = Math.random() < 0.4;
+    const base = {
+      visual: `<div class="eq">${n} × ${frac(a, d)}</div>`,
+      summary: `${n} × ${a}/${d}`,
+      answer,
+      choices: choicesFrom(answer, [`${n * a}/${n * d}`, `${a}/${n * d}`, `${n + a}/${d}`]),
+      hint: 'Multiply the top by the whole number. The bottom stays the same.',
+      steps: [
+        `${n} × ${a}/${d} means ${n} groups of ${a}/${d}.`,
+        withPic(`Add ${a}/${d} ${n} times: ${Array(n).fill(`${a}/${d}`).join(' + ')}.`, `<div class="bars">${Array(n).fill(bar(a, d)).join('')}</div>`),
+        `Multiply only the top: ${n} × ${a}. The bottom stays ${d}. Which choice matches?`,
+      ],
+      why: why(`${n} groups of ${a}/${d} make ${answer}. Multiply the top, keep the bottom.`, [
+        `Multiply the top and the bottom: ${n * a}/${n * d}.`,
+        `Add ${n} to the top: ${n + a}/${d}.`,
+      ]),
+      mistake: `${n * a}/${n * d}`,
+    };
+    if (word) {
+      return { ...base, prompt: `Each muffin needs ${a}/${d} cup of milk. How much milk do ${n} muffins need?`, visual: undefined, word: true };
+    }
+    return { ...base, prompt: 'Multiply.' };
+  }
+  if (level === 2) {
+    if (r < 0.65) {
+      const d = pick([3, 4, 5, 6, 8]);
+      const w = rand(1, 4);
+      const a = rand(1, d - 1);
+      const answer = w * d + a;
+      return {
+        prompt: `Fill in the missing number: ${w} ${a}/${d} = ?/${d}`,
+        visual: `<div class="bars">${Array(w).fill(bar(d, d)).join('')}${bar(a, d)}</div>`,
+        spoken: '',
+        answer: String(answer),
+        hint: `Each whole is ${d}/${d}. Count all the ${DEN_WORDS[d]}.`,
+        steps: [
+          `Each whole is cut into ${d} pieces: ${d}/${d}.`,
+          `${w} whole${w > 1 ? 's' : ''} is ${w} × ${d} pieces.`,
+          `Add the extra ${a} piece${a > 1 ? 's' : ''}. How many ${DEN_WORDS[d]} in all?`,
+        ],
+        why: why(`${w} × ${d} = ${w * d} ${DEN_WORDS[d]}, plus ${a} more: ${answer}/${d}.`, [`Add the numbers: ${w} + ${a} = ${w + a}.`, `Just the wholes: ${w} × ${d} = ${w * d}.`]),
+        mistake: w * d,
+      };
+    }
+    const d = pick([6, 8, 10, 12]);
+    const a = rand(3, d - 1);
+    const x = rand(1, a - 1);
+    const y = a - x;
+    const answer = `${x}/${d} + ${y}/${d}`;
+    const half = d / 2;
+    return {
+      prompt: `Which one adds up to ${a}/${d}?`,
+      answer,
+      choices: shuffle([answer, `${x}/${d} + ${y + 1}/${d}`, `${x}/${half} + ${y}/${half}`]),
+      hint: 'Same-size pieces: add the tops, keep the bottom.',
+      steps: [
+        'Same-size pieces add by adding the tops. The bottom stays the same.',
+        `You need ${a} pieces that are each 1/${d}.`,
+        'Check each choice: do the bottoms match, and do the tops add up?',
+      ],
+      why: why(`${x} + ${y} = ${a} pieces of size 1/${d}, so ${answer} makes ${a}/${d}.`, [
+        `Add the bottoms too: ${half} + ${half} = ${d}.`,
+        `${x}/${d} + ${y + 1}/${d}: any tops are fine.`,
+      ]),
+      mistake: `${x}/${half} + ${y}/${half}`,
+    };
+  }
+  if (r < 0.4) {
+    const t = rand(1, 8);
+    const h = rand(1, 99 - t * 10);
+    const answer = t * 10 + h;
+    return {
+      prompt: 'Add the fractions.',
+      visual: `<div class="eq">${frac(t, 10)} + ${frac(h, 100)} = ${frac('?', 100)}</div>`,
+      summary: `${t}/10 + ${h}/100 = ?/100`,
+      answer: String(answer),
+      hint: 'Change the tenths into hundredths first.',
+      steps: [
+        'Tenths and hundredths are different-size pieces. Make them the same first.',
+        `1 tenth is 10 hundredths, so ${t}/10 is ${t * 10}/100.`,
+        `Now add the tops: ${t * 10} + ${h}.`,
+      ],
+      why: why(`${t}/10 = ${t * 10}/100, and ${t * 10} + ${h} = ${answer}.`, [`Add the tops: ${t} + ${h} = ${t + h}.`, `Add the tops and the bottoms: ${t + h}/110.`]),
+      mistake: t + h,
+    };
+  }
+  // Add or subtract mixed numbers with the same bottom.
+  const d = pick([3, 4, 5, 6, 8]);
+  const sub = Math.random() < 0.4;
+  let w1, w2, a, b;
+  if (sub) {
+    w1 = rand(3, 6); w2 = rand(1, w1 - 1);
+    a = rand(2, d - 1); b = rand(1, a - 1);
+  } else {
+    w1 = rand(1, 4); w2 = rand(1, 3);
+    a = rand(1, d - 1); b = rand(1, d - 1);
+  }
+  const f = sub ? a - b : a + b;
+  const carry = !sub && f >= d;
+  const W = sub ? w1 - w2 : w1 + w2 + (carry ? 1 : 0);
+  const F = carry ? f - d : f;
+  const mixed = (whole, top) => (top ? `${whole} ${top}/${d}` : String(whole));
+  const answer = mixed(W, F);
+  const op = sub ? '−' : '+';
+  return {
+    prompt: sub ? 'Subtract the mixed numbers.' : 'Add the mixed numbers.',
+    visual: `<div class="eq">${w1} ${frac(a, d)} ${op} ${w2} ${frac(b, d)}</div>`,
+    summary: `${w1} ${a}/${d} ${op} ${w2} ${b}/${d}`,
+    answer,
+    choices: choicesFrom(answer, [carry ? `${w1 + w2} ${f}/${d}` : mixed(W, F + 1 < d ? F + 1 : Math.max(1, F - 1)), `${W} ${F || 1}/${d * 2}`, mixed(W + 1, F)]),
+    hint: `${sub ? 'Subtract' : 'Add'} the whole numbers, then the fractions.`,
+    steps: [
+      `${sub ? 'Subtract' : 'Add'} the whole numbers: ${w1} ${op} ${w2}.`,
+      `${sub ? 'Subtract' : 'Add'} the fractions: ${a}/${d} ${op} ${b}/${d}. The bottom stays ${d}.`,
+      carry
+        ? `${f}/${d} is more than 1 whole! ${d}/${d} makes 1 more whole, with ${f - d}/${d} left.`
+        : 'Put the whole number and the fraction together. Which choice matches?',
+    ],
+    why: why(
+      carry
+        ? `${w1} + ${w2} = ${w1 + w2}, and ${a}/${d} + ${b}/${d} = ${f}/${d}, which is ${F ? `1 whole and ${F}/${d}` : 'exactly 1 whole'}. So ${answer}.`
+        : `${w1} ${op} ${w2} = ${W}, and ${a}/${d} ${op} ${b}/${d} = ${F}/${d}. So ${answer}.`,
+      [`${sub ? 'Subtract' : 'Add'} the bottoms too.`, carry ? `${w1 + w2} ${f}/${d} is fine as it is.` : 'Only the whole numbers matter.'],
+    ),
+    mistake: carry ? `${w1 + w2} ${f}/${d}` : `${W} ${F || 1}/${d * 2}`,
+  };
+}
+
+/* Lines, rays and symmetry (4.G.1–3). Pictures are 200 × 100. */
+
+const arrowHead = (x, y, angle) => {
+  const p = (da, r) => `${(x + r * Math.cos(angle + da)).toFixed(1)},${(y + r * Math.sin(angle + da)).toFixed(1)}`;
+  return `<polygon points="${p(0, 0)} ${p(Math.PI - 0.45, 12)} ${p(Math.PI + 0.45, 12)}" class="geo-arrow"/>`;
+};
+// A straight path from (x1, y1) to (x2, y2) with an arrow or a dot on each end.
+function geoLine(x1, y1, x2, y2, start, end) {
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  const cap = (x, y, kind, a) => (kind === 'arrow' ? arrowHead(x, y, a) : kind === 'dot' ? `<circle cx="${x}" cy="${y}" r="5" class="geo-dot"/>` : '');
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="geo-line"/>${cap(x1, y1, start, ang + Math.PI)}${cap(x2, y2, end, ang)}`;
+}
+const geoSvg = (inner) => `<svg class="geo" viewBox="0 0 200 100" aria-hidden="true">${inner}</svg>`;
+
+const FIGURES = {
+  Point: { pic: () => geoSvg('<circle cx="100" cy="50" r="6" class="geo-dot"/><text x="112" y="44" class="geo-label">A</text>'), why: 'One dot is a single spot: a point.' },
+  Line: { pic: () => geoSvg(geoLine(20, 70, 180, 30, 'arrow', 'arrow')), why: 'Arrows on both ends mean it goes on forever both ways: a line.' },
+  'Line segment': { pic: () => geoSvg(geoLine(30, 65, 170, 35, 'dot', 'dot')), why: 'Dots on both ends mean it stops at both ends: a line segment.' },
+  Ray: { pic: () => geoSvg(geoLine(30, 65, 175, 35, 'dot', 'arrow')), why: 'A dot at one end and an arrow at the other: a ray starts at a spot and goes on forever one way.' },
+};
+const PAIRS = {
+  Parallel: { pic: () => geoSvg(geoLine(20, 35, 180, 25, 'arrow', 'arrow') + geoLine(20, 75, 180, 65, 'arrow', 'arrow')), why: 'They go the same way and stay the same distance apart, so they never cross: parallel.' },
+  Perpendicular: {
+    pic: () => geoSvg(geoLine(25, 55, 175, 55, 'arrow', 'arrow') + geoLine(100, 8, 100, 95, 'arrow', 'arrow') + '<path d="M100,43 L112,43 L112,55" class="geo-mark"/>'),
+    why: 'They cross and make square corners (right angles): perpendicular.',
+  },
+  Intersecting: { pic: () => geoSvg(geoLine(25, 85, 175, 15, 'arrow', 'arrow') + geoLine(25, 40, 175, 70, 'arrow', 'arrow')), why: 'They cross, but the corners aren\'t square: they just intersect.' },
+};
+
+// Shapes for parallel sides, right angles and symmetry. `sym` lines of symmetry, `oops` a common wrong count.
+const regular = (n) => Array.from({ length: n }, (_, i) => {
+  const a = -Math.PI / 2 + (2 * Math.PI * i) / n + (n % 2 ? 0 : Math.PI / n);
+  return `${(50 + 42 * Math.cos(a)).toFixed(1)},${(53 + 42 * Math.sin(a)).toFixed(1)}`;
+}).join(' ');
+const GEO_SHAPES = [
+  { name: 'square', pts: '18,18 82,18 82,82 18,82', par: 2, right: 4, sym: 4, oops: 2 },
+  { name: 'rectangle', pts: '6,30 94,30 94,72 6,72', par: 2, right: 4, sym: 2, oops: 4 },
+  { name: 'trapezoid', pts: '30,28 70,28 92,74 8,74', par: 1, right: 0, sym: 1, oops: 2 },
+  { name: 'right trapezoid', pts: '10,24 58,24 90,76 10,76', par: 1, right: 2, sym: 0, oops: 1 },
+  { name: 'parallelogram', pts: '28,28 94,28 72,74 6,74', par: 2, right: 0, sym: 0, oops: 2 },
+  { name: 'rhombus', pts: '50,6 88,50 50,94 12,50', par: 2, right: 0, sym: 2, oops: 4 },
+  { name: 'right triangle', pts: '14,16 14,86 90,86', par: 0, right: 1, sym: 0, oops: 1 },
+  { name: 'triangle', pts: regular(3), par: 0, right: 0, sym: 3, oops: 1 },
+  { name: 'pentagon', pts: regular(5), par: 0, right: 0, sym: 5, oops: 1 },
+  { name: 'hexagon', pts: regular(6), par: 3, right: 0, sym: 6, oops: 2 },
+  { name: 'octagon', pts: regular(8), par: 4, right: 0, sym: 8, oops: 4 },
+];
+
+// A polygon with small squares in its right-angle corners, and an optional dashed line.
+function geoShapePic(pts, { marks = true, dash } = {}) {
+  const p = pts.split(' ').map((s) => s.split(',').map(Number));
+  let corners = '';
+  if (marks) {
+    p.forEach(([x, y], i) => {
+      const [ax, ay] = p[(i + p.length - 1) % p.length];
+      const [bx, by] = p[(i + 1) % p.length];
+      const [ux, uy, vx, vy] = [ax - x, ay - y, bx - x, by - y];
+      const [lu, lv] = [Math.hypot(ux, uy), Math.hypot(vx, vy)];
+      if (Math.abs(ux * vx + uy * vy) > 0.5) return;
+      const k = 9;
+      const [px, py, qx, qy] = [x + (ux / lu) * k, y + (uy / lu) * k, x + (vx / lv) * k, y + (vy / lv) * k];
+      corners += `<path d="M${px.toFixed(1)},${py.toFixed(1)} L${(px + qx - x).toFixed(1)},${(py + qy - y).toFixed(1)} L${qx.toFixed(1)},${qy.toFixed(1)}" class="geo-mark"/>`;
+    });
+  }
+  const line = dash ? `<line x1="${dash[0]}" y1="${dash[1]}" x2="${dash[2]}" y2="${dash[3]}" class="geo-fold"/>` : '';
+  return `<svg class="shape" viewBox="0 0 100 100" aria-hidden="true"><polygon points="${pts}"/>${corners}${line}</svg>`;
+}
+const shapeBy = (name) => GEO_SHAPES.find((s) => s.name === name);
+
+// Is the dashed line a fold line?
+const FOLDS = [
+  ['rectangle', [50, 22, 50, 80], true], ['rectangle', [0, 51, 100, 51], true], ['rectangle', [6, 30, 94, 72], false],
+  ['square', [18, 18, 82, 82], true], ['square', [50, 10, 50, 90], true],
+  ['parallelogram', [50, 20, 50, 82], false], ['parallelogram', [28, 28, 72, 74], false],
+  ['trapezoid', [50, 20, 50, 82], true], ['trapezoid', [0, 51, 100, 51], false],
+  ['rhombus', [50, 0, 50, 100], true], ['rhombus', [31, 28, 69, 72], false],
+];
+
+function geometry4(level) {
+  const r = Math.random();
+  if (level === 1) {
+    const set = r < 0.55 ? FIGURES : PAIRS;
+    const names = Object.keys(set);
+    const answer = pick(names);
+    const choices = set === FIGURES ? shuffle([answer, ...shuffle(names.filter((x) => x !== answer)).slice(0, 2)]) : shuffle(names);
+    const others = choices.filter((c) => c !== answer);
+    return {
+      prompt: set === FIGURES ? 'What is this called?' : 'How would you describe these two lines?',
+      visual: set[answer].pic(),
+      summary: set === FIGURES ? 'Name the figure' : 'Two lines',
+      spoken: '',
+      answer,
+      choices,
+      hint: set === FIGURES ? 'Look at the ends: an arrow keeps going, a dot stops.' : 'Do they cross? If they do, are the corners square?',
+      steps: set === FIGURES
+        ? ['Look at the ends. Do you see dots, arrows, or both?', 'An arrow means it keeps going forever that way. A dot means it stops there.', 'Two arrows: forever both ways. A dot and an arrow: starts at a spot and goes forever one way. Two dots: stops at both ends.']
+        : ['Imagine the lines going on forever. Would they ever cross?', 'If they never cross and stay the same distance apart, they are parallel lines.', 'If they cross, look at the corners. Square corners mean perpendicular lines.'],
+      why: why(set[answer].why, others.map((o) => set[o].why)),
+      mistake: others[0],
+    };
+  }
+  if (level === 2) {
+    if (r < 0.3) {
+      const tri = pick([
+        ['14,16 14,86 90,86', true], ['10,82 90,82 32,30', false], ['50,12 86,86 14,86', false], ['20,20 80,30 30,86', false], ['86,14 86,86 12,86', true],
+      ]);
+      const [pts, right] = tri;
+      return {
+        prompt: 'Is this a right triangle?',
+        visual: geoShapePic(pts, { marks: false }),
+        summary: right ? 'A triangle with a square corner' : 'A triangle with no square corner',
+        spoken: '',
+        answer: right ? 'Yes' : 'No',
+        choices: ['Yes', 'No'],
+        hint: 'A right triangle has one square corner, like the corner of a page.',
+        steps: ['A right triangle has one square corner (a right angle).', 'Check each corner. Hold the corner of a piece of paper up to it.', 'Does one corner match the paper exactly?'],
+        why: right
+          ? why('One corner is a square corner, so it is a right triangle.', ['It has 3 sides, so it is always a right triangle.', 'The corners are all sharp, so it is not.'])
+          : why('No corner is a square corner, so it is not a right triangle.', ['Every triangle is a right triangle.', 'It has a long side, so it must be a right triangle.']),
+        mistake: right ? 'No' : 'Yes',
+      };
+    }
+    const s = pick(GEO_SHAPES);
+    const parallel = r < 0.65;
+    const answer = parallel ? s.par : s.right;
+    return {
+      prompt: parallel ? 'How many pairs of parallel sides does this shape have?' : 'How many right angles does this shape have?',
+      visual: geoShapePic(s.pts, { marks: !parallel }),
+      summary: `A ${s.name}`,
+      spoken: '',
+      answer: String(answer),
+      hint: parallel ? 'Parallel sides go the same way and never meet, like train tracks.' : 'A right angle is a square corner.',
+      steps: parallel
+        ? ['Parallel sides go the same way and never meet, like train tracks.', 'Check the top and bottom. Then the left and right. Then any slanted sides across from each other.', 'How many pairs did you find?']
+        : ['A right angle is a square corner, like the corner of a page.', 'The little square marks show right angles. Check every corner.', 'How many square corners are there?'],
+      why: parallel
+        ? why(`A ${s.name} has ${answer} pair${answer === 1 ? '' : 's'} of parallel sides.`, ['Count every side.', 'Sides that touch are parallel.'])
+        : why(`A ${s.name} has ${answer} square corner${answer === 1 ? '' : 's'}.`, ['Count every corner.', 'Any pointy corner is a right angle.']),
+      mistake: parallel ? (s.par === s.sym ? s.par + 1 : s.sym) : s.right === s.pts.split(' ').length ? s.right - 2 : s.pts.split(' ').length,
+    };
+  }
+  if (r < 0.5) {
+    const s = pick(GEO_SHAPES);
+    return {
+      prompt: 'How many lines of symmetry does this shape have?',
+      visual: geoShapePic(s.pts, { marks: false }),
+      summary: `A ${s.name}`,
+      spoken: '',
+      answer: String(s.sym),
+      hint: 'A line of symmetry folds the shape into two halves that match exactly.',
+      steps: [
+        'A line of symmetry folds the shape into two halves that match exactly.',
+        'Try a fold straight up and down. Then straight across.',
+        'Then try the slanted folds, corner to corner. Count every fold that works.',
+      ],
+      why: why(`A ${s.name} has ${s.sym} line${s.sym === 1 ? '' : 's'} of symmetry.`, [`Any line through the middle works, so ${s.oops}.`, 'Every shape has exactly 1.']),
+      mistake: s.oops,
+    };
+  }
+  const [name, dash, yes] = pick(FOLDS);
+  return {
+    prompt: 'Is the dashed line a line of symmetry?',
+    visual: geoShapePic(shapeBy(name).pts, { marks: false, dash }),
+    summary: `A ${name} with a dashed line`,
+    spoken: '',
+    answer: yes ? 'Yes' : 'No',
+    choices: ['Yes', 'No'],
+    hint: 'Imagine folding along the dashed line. Do the halves match exactly?',
+    steps: ['Imagine folding the shape along the dashed line.', 'Would the two halves land exactly on top of each other?', 'Do they match with no parts sticking out?'],
+    why: yes
+      ? why('Folding on the line makes the two halves match exactly.', ['The line goes through the middle, so it can\'t be.', 'Only up-and-down lines can be lines of symmetry.'])
+      : why('Folding on the line leaves parts sticking out, so the halves don\'t match.', ['It cuts the shape into two equal pieces, so it is a line of symmetry.', 'Any line through the middle is a line of symmetry.']),
+    mistake: yes ? 'No' : 'Yes',
+  };
+}
+
 export const WRONG = '👎 Wrong';
 
 function wrongAnswerFor(q) {
@@ -2509,13 +3552,16 @@ export const TOPICS = {
   2: withExtras([
     { id: 'add100', name: 'Addition', emoji: '➕', desc: 'Add numbers together', gen: addition },
     { id: 'sub100', name: 'Subtraction', emoji: '➖', desc: 'Take away', gen: subtraction },
+    { id: 'word2', name: 'Word Problems', emoji: '📝', desc: 'Find the missing number', gen: wordProblems2 },
     { id: 'place2', name: 'Place Value', emoji: '🏠', desc: 'Hundreds, tens & ones', gen: placeValue2 },
+    { id: 'mental2', name: 'Mental Math', emoji: '🧠', desc: 'Jump by 10s & 100s, number names', gen: mentalMath2 },
     { id: 'skip', name: 'Skip Counting', emoji: '🐸', desc: 'Count by 2s, 5s, 10s & more', gen: skipCount },
     { id: 'compare2', name: 'Compare Numbers', emoji: '🐊', desc: 'Greater than, less than', gen: compare2 },
     { id: 'evenodd', name: 'Even & Odd', emoji: '👯', desc: 'Partners or leftovers?', gen: evenOdd },
     { id: 'groups', name: 'Equal Groups', emoji: '🍎', desc: 'Rows and arrays', gen: equalGroups },
     { id: 'money', name: 'Money', emoji: '🪙', desc: 'Count the coins', gen: money },
-    { id: 'time', name: 'Telling Time', emoji: '🕒', desc: 'Read the clock', gen: time },
+    { id: 'time', name: 'Telling Time', emoji: '🕒', desc: 'Read the clock, a.m. & p.m.', gen: time },
+    { id: 'length2', name: 'Measuring Length', emoji: '📏', desc: 'Rulers, inches & centimeters', gen: length2 },
     { id: 'graphs', name: 'Graphs', emoji: '📊', desc: 'Picture & bar graphs', gen: graphs },
     { id: 'shapes', name: 'Shapes', emoji: '🔷', desc: 'Sides, corners & parts', gen: shapes },
   ]),
@@ -2538,17 +3584,22 @@ export const TOPICS = {
     { id: 'multfacts', name: 'Times Tables', emoji: '✖️', desc: 'Facts up to 12 × 12', gen: multFacts },
     { id: 'multbig', name: 'Big Multiplication', emoji: '🏗️', desc: 'Multi-digit multiplying', gen: multBig },
     { id: 'division', name: 'Division', emoji: '➗', desc: 'With and without remainders', gen: division },
+    { id: 'timesas', name: 'Times as Many', emoji: '🐘', desc: 'Compare by multiplying', gen: timesAsMany },
+    { id: 'multistep4', name: 'Multi-Step Problems', emoji: '🪜', desc: 'Word problems & remainders', gen: multiStep4 },
+    { id: 'patterns4', name: 'Patterns', emoji: '🔁', desc: 'Rules & what comes next', gen: patterns4 },
     { id: 'addsub4', name: 'Add & Subtract', emoji: '🧮', desc: 'Big numbers, carry & borrow', gen: addSubBig },
     { id: 'factors', name: 'Factors & Multiples', emoji: '🔢', desc: 'Factors, multiples & primes', gen: factors },
     { id: 'equivfrac', name: 'Equal Fractions', emoji: '🍕', desc: 'Find equivalent fractions', gen: equivFractions },
     { id: 'comparefrac', name: 'Compare Fractions', emoji: '⚖️', desc: 'Which fraction is bigger?', gen: compareFractions },
     { id: 'addfrac', name: 'Add Fractions', emoji: '🥧', desc: 'Same-size pieces', gen: addFractions },
+    { id: 'morefrac', name: 'More Fractions', emoji: '🧁', desc: 'Mixed numbers & × whole numbers', gen: moreFractions },
     { id: 'decimals', name: 'Decimals', emoji: '🔟', desc: 'Tenths & hundredths', gen: decimals },
     { id: 'rounding', name: 'Rounding', emoji: '🎯', desc: 'Round to the nearest place', gen: rounding },
     { id: 'place4', name: 'Place Value', emoji: '🏰', desc: 'Big numbers, digit by digit', gen: placeValue4 },
     { id: 'area', name: 'Area & Perimeter', emoji: '📐', desc: 'Inside and around rectangles', gen: areaPerimeter },
     { id: 'measure', name: 'Measurement', emoji: '📏', desc: 'Convert units', gen: measurement },
     { id: 'angles', name: 'Angles', emoji: '🔺', desc: 'Kinds, protractors & missing angles', gen: angles },
+    { id: 'geometry4', name: 'Lines & Symmetry', emoji: '🪁', desc: 'Rays, parallel lines & folds', gen: geometry4 },
     { id: 'lineplot', name: 'Line Plots', emoji: '📈', desc: 'Read data with X marks', gen: linePlots },
   ]),
 };

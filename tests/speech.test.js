@@ -9,6 +9,8 @@ const cases = [
   ['4 × 6 = ?', '4 times 6 equals what?'],
   ['The two parts make a right angle (90°).', 'degrees'],
   ['75¢', '75 cents'],
+  ['2 1/4 + 1 2/4', '2 and 1 fourth plus 1 and 2 fourths'],
+  ['Which time makes the most sense to eat lunch?', 'eat lunch'],
 ];
 for (const [text, want] of cases) {
   test(`reads "${text}"`, () => assert.ok(toSpeech(text).includes(want), toSpeech(text)));

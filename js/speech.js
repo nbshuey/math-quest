@@ -16,6 +16,7 @@ function fractionWords(n, d) {
 export function toSpeech(text) {
   return String(text)
     .replace(/\p{Extended_Pictographic}|️/gu, '')
+    .replace(/(\d) (\d+\/\d+)/g, '$1 and $2') // mixed numbers: "2 1/4" → "2 and 1 fourth"
     .replace(/(\d+|\?)\/(\d+|\?)/g, (_, n, d) => fractionWords(n, d))
     .replace(/=\s*\?/g, 'equals what?')
     .replace(/(\d)\s*R(\d)/g, '$1 remainder $2')

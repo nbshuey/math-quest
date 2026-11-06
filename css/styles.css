@@ -965,3 +965,29 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .groups { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .group { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; max-width: 4.4em; gap: 4px; padding: 12px 14px; border: 3px dashed var(--primary); border-radius: 40px; font-size: clamp(1.5rem, 5.5vw, 2rem); line-height: 1.1; }
 .fracline .frac-dot { fill: var(--bad); }
+
+/* ----- Rulers, bar models, lines and symmetry ----- */
+.ruler { width: min(calc(var(--w) * 1.25px), 92vw); display: block; margin: 0 auto; }
+.ruler .ruler-body { fill: #fff3bf; stroke: #c99a00; stroke-width: 1.5; }
+.ruler .ruler-tick { stroke: var(--ink); stroke-width: 2; }
+.ruler .ruler-num { font-size: 12px; font-weight: 800; text-anchor: middle; fill: var(--ink); }
+.ruler .ruler-bar { fill: var(--primary); }
+.ruler .ruler-bar.b2 { fill: var(--good); }
+.ruler .ruler-guide { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tape { display: inline-flex; flex-direction: column; gap: 6px; width: min(320px, 82vw); background: #fff; border-radius: 12px; padding: 8px 10px; }
+.tape-total { border: 2px solid var(--ink); border-bottom: 0; border-radius: 8px 8px 0 0; height: 14px; position: relative; margin: 10px 0 0 calc(var(--name-w, 0px)); }
+.tape-total span { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); background: #fff; padding: 0 6px; font-weight: 800; }
+.tape-row { display: flex; align-items: center; gap: 6px; }
+.tape-name { width: 3.2em; flex-shrink: 0; font-size: 0.85rem; text-align: right; }
+.tape-parts { display: flex; flex: 1; gap: 2px; }
+.tape-parts span { min-width: 1.6em; padding: 4px 2px; text-align: center; font-weight: 800; background: var(--soft); border: 2px solid var(--primary); border-radius: 6px; }
+.tape-parts span.q { background: #fff3bf; border-color: var(--gold); }
+.tape-parts span.gap { border-style: dashed; }
+.tape-parts span.gone { background: #ffe3e3; border-color: var(--bad); }
+.tape-parts i { display: block; }
+.geo { width: min(300px, 78vw); overflow: visible; }
+.geo .geo-line { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.geo .geo-arrow, .geo .geo-dot { fill: var(--ink); }
+.geo .geo-label { font-size: 15px; font-weight: 800; fill: var(--ink); }
+.geo .geo-mark, .shape .geo-mark { fill: none; stroke: var(--bad); stroke-width: 2; }
+.shape .geo-fold { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 6 4; }
