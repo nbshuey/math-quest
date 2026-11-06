@@ -313,7 +313,10 @@ function renderTopics() {
       ${playerBar(p)}
       <div class="topics-head">
         ${buddyRow(p, greeting)}
-        <button class="btn shop-btn" data-action="shop">🛒 Shop</button>
+        <div class="head-btns">
+          <button class="btn shop-btn" data-action="shop">🛒 Shop</button>
+          <button class="btn secondary shop-btn" data-action="stickers">📒 Stickers ${Object.keys(p.stickers).length}/${STICKERS.length}</button>
+        </div>
       </div>
       ${growLine(p)}
       <div class="levels" role="group" aria-label="Difficulty">${levels}</div>
@@ -326,6 +329,7 @@ function renderTopics() {
   on('[data-action="back"]', renderHome);
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="speed"]', renderSpeedIntro);
+  on('[data-action="stickers"]', renderStickers);
   on('[data-level]', (el) => {
     if (el.dataset.level === 'auto') p.autoLevel = true;
     else {
@@ -416,8 +420,11 @@ function renderShop(tab = 'buddies', message = 'Welcome to the shop! What should
     save();
     sounds.win();
     confetti(80);
-    renderShop(tab, `Yay! You got ${item.name}!`);
-    say(`Yay! You got ${item.name}!`, 'happy');
+    const stickers = checkStickers(p, { kind: 'shop' });
+    save();
+    const line = stickers.length ? `Yay! You got ${item.name}! And a new sticker: ${stickers.map((t) => `${t.emoji} ${t.name}`).join(', ')}!` : `Yay! You got ${item.name}!`;
+    renderShop(tab, line);
+    say(line, 'happy');
   });
 }
 
@@ -585,6 +592,19 @@ function renderParents(childId = state.currentId) {
       </div>
 
       <div class="panel">
+        <h2>💾 Backup</h2>
+        <p class="panel-note">Progress is saved only in this browser. Clearing the browser's data, or using another device, starts over.
+          Save a backup file now and then, and restore it here if anything goes wrong. It holds every player.</p>
+        <p class="panel-note">${state.lastBackup ? `Last backup: <strong>${ago(state.lastBackup)}</strong>.` : '<strong>No backup yet.</strong>'}
+          ${!state.lastBackup || Date.now() - state.lastBackup > 30 * 86400000 ? ' <span class="flag">💾 Time for a backup</span>' : ''}</p>
+        <div class="pin-row">
+          <button class="btn" data-action="backup">💾 Save a backup file</button>
+          <label class="btn secondary file-btn">📂 Restore from a file<input type="file" id="restoreFile" accept=".json,application/json" hidden /></label>
+        </div>
+        <div class="feedback" id="backupFeedback"></div>
+      </div>
+
+      <div class="panel">
         <h2>🔒 Grown-up PIN</h2>
         <p class="panel-note">${state.pin ? 'A PIN is set, so kids need it to open this page.' : 'Add a 4-digit PIN so kids can’t open this page.'}</p>
         <div class="pin-row">
@@ -628,6 +648,14 @@ function renderParents(childId = state.currentId) {
     save();
     renderParents(p.id);
     setFeedback('good', '✓ PIN saved');
+  });
+  on('[data-action="backup"]', () => {
+    downloadBackup();
+    renderParents(p.id);
+  });
+  app.querySelector('#restoreFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) restoreBackup(file, p.id);
   });
   on('[data-action="clearPin"]', () => {
     state.pin = '';
@@ -715,6 +743,7 @@ function renderReport(childId, weeksAgo = 0) {
   if (w.rounds.length && !tricky.length && firstPct >= 85) ideas.push(`A strong week! Try 🔥 Hard or 🧭 Auto so ${name} keeps being challenged.`);
   if (w.tellAsked && w.told / w.tellAsked >= 0.5) ideas.push(`Great talking-it-out this week. Keep tapping ⭐ when the steps are clear.`);
 
+  const weekStickers = STICKERS.filter((st) => p.stickers[st.id] >= w.from && p.stickers[st.id] < w.to);
   const days = DAY_NAMES.map((d, i) => `<div class="day ${w.perDay[i] ? 'on' : ''}"><b>${d}</b><span>${w.perDay[i] ? '✓'.repeat(Math.min(3, w.perDay[i])) : '–'}</span></div>`).join('');
 
   show(`
@@ -745,6 +774,7 @@ function renderReport(childId, weeksAgo = 0) {
           <div class="tile"><strong>🪙 ${w.coins}</strong><span>coins earned</span></div>
         </div>
         <div class="days">${days}</div>` : `<p class="panel-note">No quests this week${weeksAgo === 0 ? ' yet' : ''}.</p>`}
+        ${weekStickers.length ? `<p class="panel-note">📒 New stickers: ${weekStickers.map((st) => `${st.emoji} ${esc(st.name)}`).join(' · ')}</p>` : ''}
       </div>
 
       ${rowHtml ? `<div class="panel"><h2>📚 Topics</h2><p class="panel-note">How often ${name} got it right on the first try, and how many questions.</p>${rowHtml}</div>` : ''}
@@ -781,6 +811,57 @@ function renderReport(childId, weeksAgo = 0) {
   });
 }
 
+/* ---------------------------- Backup ---------------------------- */
+
+// Saves everything (all players) as a file the grown-up can keep.
+function downloadBackup() {
+  state.lastBackup = Date.now();
+  save();
+  const data = JSON.stringify({ app: 'math-quest', version: 1, saved: Date.now(), state });
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  a.download = `math-quest-backup-${day}.json`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function restoreBackup(file, childId) {
+  const fail = (text) => {
+    const el = app.querySelector('#backupFeedback');
+    if (el) {
+      el.className = 'feedback try';
+      el.textContent = text;
+    }
+  };
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    return fail("That file isn't a Math Quest backup.");
+  }
+  const incoming = data?.app === 'math-quest' ? data.state : data;
+  if (!Array.isArray(incoming?.profiles) || !incoming.profiles.length || !incoming.profiles.every((k) => k?.id && k?.name)) {
+    return fail("That file isn't a Math Quest backup.");
+  }
+  const when = data.saved ? new Date(data.saved).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'an earlier date';
+  const names = incoming.profiles.map((k) => k.name).join(', ');
+  if (!confirm(`Replace everything on this device with the backup from ${when} (${names})? Progress since then will be lost.`)) return;
+  saveState(incoming);
+  state = loadState();
+  sounds.enabled = state.sound;
+  state.lastBackup ??= data.saved;
+  save();
+  renderParents(state.profiles.some((k) => k.id === childId) ? childId : state.profiles[0].id);
+  const el = app.querySelector('#backupFeedback');
+  el.className = 'feedback good';
+  el.textContent = `✓ Restored ${names}`;
+}
+
 /* ---------------------------- Playing ---------------------------- */
 
 // "How do you know?" comes up on these questions (or the next one answered right on the first try).
@@ -793,7 +874,7 @@ function startRound(topicId) {
   const core = coreTopics(p.grade);
   const focus = core.filter((t) => p.focus.includes(t.id));
   session = {
-    topic, level: topicLevel(p, topic.id), auto: p.autoLevel, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    topic, level: topicLevel(p, topic.id), auto: p.autoLevel, total: QUESTIONS_PER_ROUND, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
     points: 0, byTopic: {}, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
     pool: [...core, ...focus, ...focus, ...focus], focus: p.focus.includes(topic.id),
     missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: false, hinted: 0,
@@ -805,6 +886,7 @@ function loadQuestion() {
   // Avoid repeating the same question within a round.
   let q;
   let tries = 0;
+  if (session.queue) session.level = session.queue[session.index].level;
   do q = session.topic.gen(session.level, session.pool);
   while (session.seen.has(q.summary ?? q.prompt) && tries++ < 25);
   session.seen.add(q.summary ?? q.prompt);
@@ -829,6 +911,7 @@ function trackLevel(firstTry) {
   if (!s.auto) return;
   if (s.upRun >= AUTO_UP && s.level < 3) {
     s.level++;
+    s.leveledUp = true;
     s.levelNote = `Level up! ⬆️ Let's try ${levelById(s.level).emoji} ${levelById(s.level).name}.`;
   } else if (s.downRun >= AUTO_DOWN && s.level > 1) {
     s.level--;
@@ -840,7 +923,7 @@ function trackLevel(firstTry) {
 
 function nextQuestion() {
   session.index++;
-  if (session.index >= QUESTIONS_PER_ROUND) finishRound();
+  if (session.index >= session.total) session.queue ? finishReplay() : finishRound();
   else loadQuestion();
 }
 
@@ -858,7 +941,7 @@ function questionSpeech(q) {
 function renderQuestion() {
   const p = currentProfile();
   const q = session.current;
-  const pct = (session.index / QUESTIONS_PER_ROUND) * 100;
+  const pct = (session.index / session.total) * 100;
   const input = q.choices
     ? `<div class="choices ${q.claim !== undefined ? 'two' : ''} ${q.choices.some((c) => c.length > 6) ? 'long' : ''}">${q.choices.map((c) => `<button class="choice" data-choice="${esc(c)}">${esc(c)}</button>`).join('')}</div>`
     : `<div class="numpad">
@@ -887,7 +970,7 @@ function renderQuestion() {
       ${buddyRow(p, greeting)}
       <div class="question" id="question">
         ${sayButton('question', 'Read the question aloud')}
-        <div class="q-count">${session.topic.emoji} Question ${session.index + 1} of ${QUESTIONS_PER_ROUND} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
+        <div class="q-count">${session.topic.emoji} ${session.queue ? 'Try again ' : 'Question '}${session.index + 1} of ${session.total} · ${session.auto ? '🧭 ' : ''}${levelById(q.level).emoji} ${levelById(q.level).name}</div>
         <div class="prompt ${q.word ? 'word' : ''}">${esc(q.prompt)}</div>
         ${q.visual ? `<div class="visual">${q.visual}</div>` : ''}
         ${claim}
@@ -1057,7 +1140,7 @@ function submit(value, choiceEl) {
   // Second miss: show the answer and let them move on.
   session.locked = true;
   const shown = q.choices ? q.answer : Number(q.answer).toLocaleString('en-US');
-  session.missed.push({ question: q.summary ?? q.prompt, answer: shown });
+  session.missed.push({ question: q.summary ?? q.prompt, answer: shown, topicId: q.topicId, level: q.level });
   recordAnswer(q, false);
   trackLevel(false);
   setFeedback('reveal', `The answer is ${shown}`);
@@ -1219,7 +1302,9 @@ function finishRound() {
   goalBonus(p, bonuses);
   entry.coins = earned + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += entry.coins;
+  p.questCount++;
   const grown = growBuddy(p, entry.coins);
+  const stickers = checkStickers(p, { kind: 'quest', topicId: topic.id, level, firstTry, bestStreak, whyRight, told, levelUp: !!session.leveledUp });
   save();
 
   sounds.win();
@@ -1249,6 +1334,7 @@ function finishRound() {
         ${whyAsked ? `<p class="result-line">🧠 Great thinking: <strong>${whyRight} of ${whyAsked}</strong> explanations</p>` : ''}
         ${tellAsked ? `<p class="result-line">🗣️ Explained out loud: <strong>${told} of ${tellAsked}</strong> great</p>` : ''}
         ${grewLine(p, grown)}
+        ${stickerLine(stickers)}
         <p class="result-line">🪙 +${earned} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${auto ? `<p class="result-line">🧭 Level: ${moved ? `${levelById(startLevel).emoji} ${levelById(startLevel).name} → ` : ''}<strong>${levelById(session.level).emoji} ${levelById(session.level).name}</strong>${moved ? '' : ' (staying here)'}</p>` : ''}
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
@@ -1261,6 +1347,7 @@ function finishRound() {
             : ''
         }
         <div class="panel-actions">
+          ${missed.length ? `<button class="btn" data-action="replay">🔁 Try these again (${Math.min(missed.length, REPLAY_MAX)})</button>` : ''}
           <button class="btn secondary" data-action="shop">🛒 Shop</button>
           <button class="btn secondary" data-action="topics">Pick another</button>
           ${nextLevel ? `<button class="btn" data-action="harder">Try ${nextLevel.name} ${nextLevel.emoji}</button>` : '<button class="btn" data-action="again">Play again</button>'}
@@ -1275,11 +1362,160 @@ function finishRound() {
   on('[data-action="shop"]', () => renderShop());
   on('[data-action="topics"]', renderTopics);
   on('[data-action="again"]', () => startRound(topic.id));
+  on('[data-action="replay"]', () => startReplay(missed));
   on('[data-action="harder"]', () => {
     p.level = nextLevel.id;
     save();
     startRound(topic.id);
   });
+}
+
+/* ---------------------------- Sticker book ---------------------------- */
+
+// Stickers for good habits as well as right answers. Each is checked after a
+// round (ctx says what kind), or after buying something in the shop.
+const STICKER_COINS = 5;
+const quest = (c) => c.kind === 'quest';
+const totalTold = (p) => Object.values(p.stats).reduce((n, s) => n + (s.told || 0), 0);
+const topicsPlayed = (p) => coreTopics(p.grade).filter((t) => p.stats[t.id]?.asked).length;
+const daysThisWeek = (p) => new Set(p.history.filter((h) => h.t >= weekStart()).map((h) => new Date(h.t).getDay())).size;
+const ownedCount = (p) => Object.values(p.owned).reduce((n, list) => n + list.length, 0);
+
+const STICKERS = [
+  { id: 'first', emoji: '🎉', name: 'First quest', how: 'Finish a quest.', test: (p, c) => quest(c) },
+  { id: 'streak5', emoji: '🔥', name: 'On fire', how: 'Get 5 in a row on the first try.', test: (p, c) => quest(c) && c.bestStreak >= 5 },
+  { id: 'perfect', emoji: '⭐', name: 'Perfect!', how: 'Get all 10 right on the first try.', test: (p, c) => quest(c) && c.firstTry === 10 },
+  { id: 'hard', emoji: '🌶️', name: 'Brave brain', how: 'Finish a 🔥 Hard quest.', test: (p, c) => quest(c) && c.level === 3 },
+  { id: 'summit', emoji: '🏔️', name: 'Mountain top', how: 'Get a perfect 🔥 Hard quest.', test: (p, c) => quest(c) && c.level === 3 && c.firstTry === 10 },
+  { id: 'levelup', emoji: '🧭', name: 'Level up', how: 'Move up a level with 🧭 Auto.', test: (p, c) => c.levelUp },
+  { id: 'thinker', emoji: '🧠', name: 'Big thinker', how: 'Pick 3 right explanations in one quest.', test: (p, c) => quest(c) && c.whyRight >= 3 },
+  { id: 'teacher', emoji: '🗣️', name: 'Little teacher', how: 'Get a ⭐ Great explaining from your grown-up.', test: (p, c) => quest(c) && c.told >= 1 },
+  { id: 'teacher10', emoji: '🎤', name: 'Explainer pro', how: 'Get 10 ⭐ Great explaining taps in all.', test: (p) => totalTold(p) >= 10 },
+  { id: 'detective', emoji: '🕵️', name: 'Detective', how: 'Get 8 or more in Fix the Mistake.', test: (p, c) => quest(c) && c.topicId === 'mistake' && c.firstTry >= 8 },
+  { id: 'mixmaster', emoji: '🎲', name: 'Mix master', how: 'Get 8 or more in Mixed Challenge.', test: (p, c) => quest(c) && c.topicId === 'mixed' && c.firstTry >= 8 },
+  { id: 'comeback', emoji: '🔁', name: 'Comeback kid', how: 'Fix every one in a “Try these again” round.', test: (p, c) => c.kind === 'replay' && c.firstTry === c.total },
+  { id: 'quick', emoji: '⚡', name: 'Quick', how: 'Get 10 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 10 },
+  { id: 'rocket', emoji: '🚀', name: 'Rocket', how: 'Get 20 or more in a 1-minute Speed Round.', test: (p, c) => c.kind === 'speed' && c.seconds === 60 && c.score >= 20 },
+  { id: 'sharp', emoji: '🎯', name: 'Sharpshooter', how: 'Get 10 or more in a Speed Round with no misses.', test: (p, c) => c.kind === 'speed' && c.score >= 10 && c.wrong === 0 },
+  { id: 'q10', emoji: '📚', name: 'Ten quests', how: 'Finish 10 quests.', test: (p) => p.questCount >= 10 },
+  { id: 'q50', emoji: '🏰', name: 'Fifty quests', how: 'Finish 50 quests.', test: (p) => p.questCount >= 50 },
+  { id: 'q100', emoji: '💯', name: 'Hundred club', how: 'Finish 100 quests.', test: (p) => p.questCount >= 100 },
+  { id: 'days3', emoji: '📅', name: '3-day week', how: 'Practice on 3 different days in one week.', test: (p) => daysThisWeek(p) >= 3 },
+  { id: 'days5', emoji: '🗓️', name: '5-day week', how: 'Practice on 5 different days in one week.', test: (p) => daysThisWeek(p) >= 5 },
+  { id: 'goal', emoji: '🥅', name: 'Goal getter', how: 'Reach your weekly goal.', test: (p) => p.weeklyGoal > 0 && questsThisWeek(p) >= p.weeklyGoal },
+  { id: 'explorer', emoji: '🗺️', name: 'Explorer', how: 'Play 5 different topics.', test: (p) => topicsPlayed(p) >= 5 },
+  { id: 'traveler', emoji: '🌍', name: 'World traveler', how: 'Play every topic in your grade.', test: (p) => topicsPlayed(p) >= coreTopics(p.grade).length },
+  { id: 'growing', emoji: '🌿', name: 'Growing up', how: 'Grow a buddy to 🌿 Big.', test: (p) => maxStage(p) >= 2 },
+  { id: 'legend', emoji: '👑', name: 'Legend keeper', how: 'Grow a buddy to 🌟 Legend.', test: (p) => maxStage(p) >= 4 },
+  { id: 'shopper', emoji: '🛍️', name: 'First buy', how: 'Buy something in the shop.', test: (p) => ownedCount(p) >= 1 },
+  { id: 'collector', emoji: '🎒', name: 'Collector', how: 'Own 10 things from the shop.', test: (p) => ownedCount(p) >= 10 },
+];
+
+// Awards any new stickers (with coins) and returns them.
+function checkStickers(p, ctx) {
+  const earned = STICKERS.filter((st) => !p.stickers[st.id] && st.test(p, ctx));
+  for (const st of earned) p.stickers[st.id] = Date.now();
+  p.coins += earned.length * STICKER_COINS;
+  return earned;
+}
+
+function stickerLine(stickers) {
+  if (!stickers.length) return '';
+  return `<div class="new-stickers"><strong>📒 New sticker${stickers.length > 1 ? 's' : ''}!</strong>
+    <div class="sticker-row">${stickers.map((st) => `<span class="sticker earned"><b>${st.emoji}</b>${esc(st.name)}</span>`).join('')}</div>
+    <small>🪙 +${stickers.length * STICKER_COINS} coins</small></div>`;
+}
+
+function renderStickers() {
+  const p = currentProfile();
+  applyLook(p);
+  const have = Object.keys(p.stickers).length;
+  const cards = STICKERS.map((st) => {
+    const when = p.stickers[st.id];
+    return `<div class="sticker ${when ? 'earned' : 'locked'}"><b>${st.emoji}</b><strong>${esc(st.name)}</strong>
+      <small>${when ? `✓ ${new Date(when).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : esc(st.how)}</small></div>`;
+  }).join('');
+  const next = STICKERS.find((st) => !p.stickers[st.id]);
+  show(`
+    <div class="screen">
+      ${playerBar(p)}
+      <div class="topics-head">${buddyRow(p, have === STICKERS.length ? 'You got every sticker! WOW! 🏆' : `You have ${have} of ${STICKERS.length} stickers!${next ? ` Next idea: ${next.how}` : ''}`)}</div>
+      <h2 class="sticker-title">📒 Sticker book</h2>
+      <div class="sticker-book">${cards}</div>
+      <p class="shop-tip">Each new sticker gives 🪙 ${STICKER_COINS} coins. Grey ones say how to get them.</p>
+    </div>`);
+  bindSound();
+  bindBubble();
+  on('[data-action="back"]', renderTopics);
+}
+
+/* ---------------------------- Try these again ---------------------------- */
+
+// A short round with fresh questions of the same kinds the kid just missed.
+const REPLAY_MAX = 5;
+const REPLAY_BONUS = 5; // for fixing every one
+
+function startReplay(missed) {
+  const p = currentProfile();
+  const queue = missed.slice(0, REPLAY_MAX).map((m) => ({ topicId: m.topicId, level: m.level }));
+  session = {
+    topic: {
+      id: 'replay', name: 'Try again', emoji: '🔁',
+      gen: (level) => {
+        const m = session.queue[session.index];
+        return { topicId: m.topicId, ...findTopic(m.topicId).gen(level) };
+      },
+    },
+    queue, total: queue.length, level: queue[0].level, auto: false, index: 0, firstTry: 0, streak: 0, bestStreak: 0,
+    points: 0, byTopic: {}, upRun: 0, downRun: 0, levelNote: '', levelCounts: { 1: 0, 2: 0, 3: 0 },
+    pool: coreTopics(p.grade), focus: false,
+    missed: [], seen: new Set(), whyDue: false, whyAsked: 0, whyRight: 0, tellAsked: 0, told: 0, tellOff: true, hinted: 0,
+  };
+  loadQuestion();
+  say(`New numbers, same kind of problem. You've got this! 🔁`, 'happy');
+}
+
+function finishReplay() {
+  const p = currentProfile();
+  const { firstTry, total, missed } = session;
+  const allFixed = firstTry === total;
+  const bonuses = allFixed ? [['🔁 Fixed them all', REPLAY_BONUS]] : [];
+  const coins = session.points + bonuses.reduce((sum, [, n]) => sum + n, 0);
+  p.coins += coins;
+  const grown = growBuddy(p, coins);
+  const stickers = checkStickers(p, { kind: 'replay', firstTry, total });
+  save();
+
+  sounds.win();
+  confetti(allFixed ? 120 : 50);
+  const buddyLine = grown.after > grown.before
+    ? 'Look, I grew! Thank you for practicing with me! 🎉'
+    : allFixed ? 'You fixed every one! That’s how brains grow! 💪' : 'Great try! Mistakes help us learn.';
+
+  show(`
+    <div class="screen">
+      <div class="panel results">
+        ${buddyRow(p, buddyLine)}
+        <h2>🔁 You fixed ${firstTry} of ${total}!</h2>
+        <p class="result-line">🪙 +${session.points} coins</p>
+        ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
+        ${stickerLine(stickers)}
+        ${grewLine(p, grown)}
+        ${growLine(p, coins)}
+        ${missed.length ? `<div class="review"><h3>Still tricky</h3>
+          ${missed.map((m) => `<div class="review-row"><span>${esc(m.question)}</span><strong>${esc(m.answer)}</strong></div>`).join('')}</div>` : ''}
+        <div class="panel-actions">
+          ${missed.length ? '<button class="btn" data-action="replay">🔁 Try those again</button>' : ''}
+          <button class="btn secondary" data-action="topics">Pick another</button>
+        </div>
+      </div>
+    </div>`);
+  bindBubble();
+  say(buddyLine, 'happy');
+  if (grown.after > grown.before) app.querySelector('#buddy').classList.add('growing');
+  if (p.autoRead) speak(`You fixed ${firstTry} of ${total}. ${buddyLine}`);
+  on('[data-action="topics"]', renderTopics);
+  on('[data-action="replay"]', () => startReplay(missed));
 }
 
 /* ---------------------------- Speed Round ---------------------------- */
@@ -1520,7 +1756,9 @@ function finishSpeed() {
   goalBonus(p, bonuses);
   p.history[0].coins = score + bonuses.reduce((sum, [, n]) => sum + n, 0);
   p.coins += p.history[0].coins;
+  p.questCount++;
   const grown = growBuddy(p, p.history[0].coins);
+  const stickers = checkStickers(p, { kind: 'speed', score, seconds, wrong: s.missed.length, levelUp: newLevel > level });
   save();
 
   sounds.win();
@@ -1542,6 +1780,7 @@ function finishSpeed() {
         <p class="result-line">🪙 +${score} coins &nbsp; 🔥 Best streak: ${bestStreak}</p>
         ${bonuses.map(([label, n]) => `<p class="result-line bonus">${label}! 🪙 +${n}</p>`).join('')}
         ${grewLine(p, grown)}
+        ${stickerLine(stickers)}
         ${growLine(p, p.history[0].coins)}
         ${
           toPractice.length

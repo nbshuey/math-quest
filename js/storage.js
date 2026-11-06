@@ -36,6 +36,7 @@ function normalizeProfile(p) {
     // Progress: per-topic totals, and the most recent rounds.
     stats: {},
     history: [],
+    stickers: {}, // sticker id → when it was earned
     ...p,
     owned: { buddies: [], hats: [], extras: [], themes: [], ...p.owned },
   };
@@ -45,6 +46,8 @@ function normalizeProfile(p) {
     const earned = out.history.reduce((n, h) => n + (h.coins ?? (h.firstTry ?? h.speed ?? 0) * (h.level ?? 1)), 0);
     out.buddyXp = { [out.buddy]: earned };
   }
+  // Quests finished in all (history only keeps the most recent ones).
+  out.questCount ??= out.history.length;
   // Stars used to be stored per topic; they're now per topic and level ("topic:level").
   for (const [key, stars] of Object.entries(out.best)) {
     if (key.includes(':')) continue;
