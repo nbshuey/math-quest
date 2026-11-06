@@ -48,7 +48,13 @@ A fun, interactive math practice web app for kids, built for **2nd** and **4th**
 - On-screen number pad (tablet friendly) plus keyboard support
 - Progress is saved in the browser (localStorage)
 
-## Running it
+## Playing it
+
+**Online:** https://nbshuey.github.io/math-quest/ works on any device, any time, including offline once it has loaded. On an iPad, open it in Safari, tap Share, then **Add to Home Screen**.
+
+Progress is saved on each device and for each address. Moving from the home Mac version to the online one (or to another device)? Save a backup on the Grown-ups page and restore it on the new one.
+
+## Running it on this Mac
 
 No build step or dependencies. From this folder, run:
 
@@ -71,15 +77,41 @@ The Mac must be on and running `serve.py` for the iPad to load the game.
 ## Project layout
 
 ```
-index.html        page shell
-css/styles.css    all styling
-js/app.js         screens, game loop, keyboard handling
-js/problems.js    problem generators per grade and level (add new topics here)
-js/shop.js        buddies, hats and themes with their prices
-js/speech.js      read-aloud, turning math symbols into spoken words
-js/storage.js     saving profiles & progress
-js/effects.js     confetti and sound effects
+index.html          page shell
+css/styles.css      all styling
+sw.js               offline support for the hosted site
+serve.py            local server (no caching problems)
+js/app.js           starts the app, keyboard
+js/home.js          home, Edit player, the quest (topics) screen
+js/play.js          playing a round, hints, explaining, results, Try again, warm-up, boss battles
+js/speedround.js    the timed Speed Round
+js/shopscreen.js    shop, treats, sticker book
+js/parents.js       Grown-ups page, weekly report, backup
+js/ui.js            shared screen helpers (buddy, theme, sound)
+js/rewards.js       rules for growth, goals, stickers, warm-ups, bosses, reports (no screen code)
+js/state.js         saved state, constants, small helpers (no screen code)
+js/problems.js      question generators per grade and level (add new topics here)
+js/shop.js          everything in the shop, with prices and seasons
+js/speech.js        read-aloud, turning math symbols into spoken words
+js/storage.js       saving profiles & progress, upgrading older saves
+js/effects.js       confetti and sound effects
+tests/              automatic tests
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+No installs needed (Node's built-in test runner). The tests check:
+
+- **Every question type** in every grade and level, hundreds of times each: the answer is among the choices, there are 2 different wrong explanations, Fix the Mistake's wrong answer really is wrong, hint steps never give the answer away, nothing reads "undefined", and read-aloud can handle it. Set `RUNS=3000 npm test` for a longer run.
+- **Rewards rules:** buddy growth and unlocks, weekly and team goals (once a week, paid to everyone), stickers (once each), warm-up picks and streaks, bosses, birthdays (including across New Year), and the weekly report's numbers.
+- **Saving:** older saves upgrade without losing progress, and a corrupted save doesn't crash.
+- **Imports:** every file imports each shared name it uses, and the offline cache lists every file.
+
+They also run on GitHub after every push (the Actions tab).
 
 ### Adding a topic
 

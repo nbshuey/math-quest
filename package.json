@@ -1,0 +1,10 @@
+{
+  "name": "math-quest",
+  "private": true,
+  "type": "module",
+  "description": "Math practice quests for grades 2, 3 and 4. No dependencies.",
+  "scripts": {
+    "start": "python3 serve.py",
+    "test": "node --test tests/*.test.js"
+  }
+}
