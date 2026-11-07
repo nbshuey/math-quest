@@ -193,3 +193,40 @@ test('a perfect unit test earns the Test star sticker', () => {
   assert.equal(R.checkStickers(kid, { kind: 'test', firstTry: 9, total: 10 }).some((s) => s.id === 'test100'), false);
   assert.ok(R.checkStickers(kid, { kind: 'test', firstTry: 10, total: 10 }).some((s) => s.id === 'test100'));
 });
+
+test('How it’s going: struggling topics with reasons, strong topics, and topics not tried', () => {
+  const now = Date.now();
+  const day = 86400000;
+  kid.stats.multfacts = { asked: 40, firstTry: 36, hinted: 2, whyAsked: 4, whyRight: 4, last: now };
+  kid.stats.division = { asked: 20, firstTry: 10, hinted: 12, whyAsked: 0, whyRight: 0, last: now };
+  kid.stats.rounding = { asked: 20, firstTry: 17, hinted: 0, whyAsked: 0, whyRight: 0, last: now };
+  kid.stats.angles = { asked: 20, firstTry: 12, hinted: 0, whyAsked: 0, whyRight: 0, last: now };
+  kid.history = [
+    // Rounding is fine with hints but not on a test.
+    { t: now - day, topic: 'test', unit: 'rounding', level: 2, firstTry: 4, total: 10, byTopic: { rounding: [10, 4] } },
+    // Angles was hard before and is better lately.
+    { t: now - 2 * day, topic: 'angles', level: 2, firstTry: 9, byTopic: { angles: [10, 9] } },
+    { t: now - 30 * day, topic: 'angles', level: 2, firstTry: 3, byTopic: { angles: [10, 3] } },
+  ];
+  const g = R.progressSummary(kid, now);
+  const ids = (rows) => rows.map((r) => r.topic.id);
+  assert.deepEqual(ids(g.struggling), ['rounding', 'division']);
+  const division = g.struggling.find((r) => r.topic.id === 'division');
+  assert.deepEqual(division.reasons.map((r) => r.kind), ['tricky', 'hints']);
+  const rounding = g.struggling.find((r) => r.topic.id === 'rounding');
+  assert.deepEqual(rounding.reasons.map((r) => r.kind), ['recent', 'test']);
+  assert.match(rounding.tip, /without/);
+  assert.deepEqual(ids(g.improving), ['angles'], 'angles was hard before but is fine lately');
+  assert.deepEqual(ids(g.strong), ['multfacts']);
+  assert.equal(g.notTried.length, coreTopics(4).length - 4);
+  assert.equal(g.overall.pct, 75);
+  assert.equal(g.lastTest.pct, 40);
+});
+
+test('How it’s going is empty for a new player', () => {
+  const g = R.progressSummary(kid);
+  assert.equal(g.overall.asked, 0);
+  assert.equal(g.struggling.length, 0);
+  assert.equal(g.judged, 0);
+  assert.equal(g.notTried.length, coreTopics(4).length);
+});

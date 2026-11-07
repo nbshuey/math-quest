@@ -4,7 +4,7 @@ import { LEVELS } from './problems.js';
 import { saveState } from './storage.js';
 import { sounds } from './effects.js';
 import { QUESTIONS_PER_ROUND, state, esc, save, levelById, topicLevel, AUTO_UP, AUTO_DOWN, buddyName, coreTopics, findTopic, FOCUS_BONUS, GOAL_BONUS, startOfDay, questsThisWeek, reloadState } from './state.js';
-import { DAY_NAMES, shortDate, pctOf, weekSummary, TEAM_BONUS, TEAM_GOALS, teamCount, STICKERS, factFromKey } from './rewards.js';
+import { DAY_NAMES, shortDate, pctOf, weekSummary, TEAM_BONUS, TEAM_GOALS, teamCount, STICKERS, factFromKey, progressSummary, RECENT_DAYS, STRUGGLE_PCT } from './rewards.js';
 import { app, show, applyLook, on } from './ui.js';
 import { setFeedback } from './play.js';
 import { minutes } from './speedround.js';
@@ -108,6 +108,8 @@ export function renderParents(childId = state.currentId) {
       <div class="tabs" role="tablist">
         ${state.profiles.map((k) => `<button class="tab ${k.id === p.id ? 'selected' : ''}" data-child="${k.id}" role="tab">${k.avatar} ${esc(k.name)}</button>`).join('')}
       </div>
+
+      ${howItsGoing(p)}
 
       <div class="panel report-link">
         <h2>📄 Weekly report</h2>
@@ -215,6 +217,13 @@ export function renderParents(childId = state.currentId) {
   on('[data-action="back"]', renderHome);
   on('[data-child]', (el) => renderParents(el.dataset.child));
   on('[data-action="report"]', () => renderReport(p.id));
+  on('[data-focus-add]', (el) => {
+    p.focus = [...new Set([...p.focus, el.dataset.focusAdd])];
+    save();
+    const y = window.scrollY;
+    renderParents(p.id);
+    window.scrollTo(0, y);
+  });
   on('[data-focus]', (el) => {
     const id = el.dataset.focus;
     p.focus = p.focus.includes(id) ? p.focus.filter((x) => x !== id) : [...p.focus, id];
@@ -269,6 +278,47 @@ export function renderParents(childId = state.currentId) {
     save();
     renderParents(p.id);
   });
+}
+
+// 📊 How it's going: the big picture for one kid, with struggling topics first.
+export function howItsGoing(p) {
+  const g = progressSummary(p);
+  const name = esc(p.name);
+  if (!g.overall.asked) {
+    return `<div class="panel progress-panel"><h2>📊 How ${name} is doing</h2><p class="panel-note">Nothing to show yet. After a few quests, this shows what's going well and where ${name} is struggling.</p></div>`;
+  }
+  const trend = g.recent.pct === null ? '' : g.recent.pct > g.overall.pct + 4 ? '▲' : g.recent.pct < g.overall.pct - 4 ? '▼' : '';
+  const unit = (u) => (u === 'all' ? '🎓 Grade review' : `${findTopic(u)?.emoji ?? ''} ${esc(findTopic(u)?.name ?? u)}`);
+  const topicName = (t) => `${t.emoji} ${esc(t.name)}`;
+  const focusBtn = (r) => (r.focus ? '<small class="flag">⭐ Focus area</small>' : `<button class="link-btn" data-focus-add="${r.topic.id}">⭐ Make it a focus area</button>`);
+  const struggle = g.struggling.map((r) => `
+    <div class="struggle">
+      <div class="struggle-head"><strong>${topicName(r.topic)}</strong>${focusBtn(r)}</div>
+      <ul>${r.reasons.map((x) => `<li>${esc(x.text)}</li>`).join('')}${r.improving ? `<li>📈 getting better: ${r.olderPct}% → ${r.recentPct}% lately</li>` : ''}</ul>
+      ${r.tip ? `<p class="struggle-tip">💬 ${esc(r.tip)}</p>` : ''}
+    </div>`).join('');
+  const list = (rows, show) => rows.map((r) => `<li>${topicName(r.topic)}: ${show(r)}</li>`).join('');
+  const facts = Object.entries(p.speed.missed).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => `${k} = ${factFromKey(k).answer}`);
+  return `
+    <div class="panel progress-panel">
+      <h2>📊 How ${name} is doing</h2>
+      <div class="tiles">
+        <div class="tile"><strong>${g.overall.pct}%</strong><span>right first try, all time</span><small class="delta">${g.overall.asked} questions</small></div>
+        <div class="tile"><strong>${g.recent.pct === null ? '–' : `${g.recent.pct}% ${trend}`}</strong><span>last ${RECENT_DAYS} days</span>${g.recent.asked ? `<small class="delta">${g.recent.asked} questions</small>` : ''}</div>
+        <div class="tile"><strong>${g.overall.topics} of ${g.overall.of}</strong><span>topics practiced</span></div>
+        <div class="tile"><strong>${g.lastTest ? `${g.lastTest.pct}%` : '–'}</strong><span>${g.lastTest ? `last test: ${unit(g.lastTest.unit)}` : 'no Unit Test yet'}</span>${g.lastTest ? `<small class="delta">${ago(g.lastTest.t)}</small>` : ''}</div>
+      </div>
+      <h3>🔎 Struggling with</h3>
+      ${struggle || (g.judged
+        ? `<p class="panel-note">Nothing right now: no topic is under ${STRUGGLE_PCT}%. 🎉</p>`
+        : `<p class="panel-note">Not enough practice yet to tell. A topic shows up here after about 8 questions.</p>`)}
+      ${g.watch.length ? `<h3>👀 Keep an eye on</h3><ul class="progress-list">${list(g.watch, (r) => esc(r.reasons.map((x) => x.text).join('; ')))}</ul>` : ''}
+      ${g.improving.length ? `<h3>📈 Getting better</h3><ul class="progress-list">${list(g.improving, (r) => `${r.olderPct}% → ${r.recentPct}% lately`)}</ul>` : ''}
+      ${g.strong.length ? `<h3>🌟 Going well</h3><ul class="progress-list">${list(g.strong.slice(0, 6), (r) => `${r.pct}%`)}</ul>` : ''}
+      ${facts.length ? `<h3>⚡ Facts to practice</h3><p class="panel-note">${facts.map(esc).join(' · ')}</p>` : ''}
+      ${g.notTried.length ? `<h3>🌱 Not tried yet</h3><p class="panel-note">${g.notTried.map(topicName).join(' · ')}</p>` : ''}
+      <p class="panel-note small-note">Counts every question answered: quests, warm-ups, boss battles and Unit Tests. A topic needs a few questions before it shows up here.</p>
+    </div>`;
 }
 
 export function renderReport(childId, weeksAgo = 0) {

@@ -247,3 +247,94 @@ export function factFromKey(key) {
   const [x, y] = [Number(a), Number(b)];
   return { text: `${x} ${op} ${y}`, key, answer: String({ '+': x + y, '−': x - y, '×': x * y, '÷': x / y }[op]) };
 }
+
+// 📊 How it's going (Grown-ups page): strong topics, topics getting better, struggling topics
+// with the reasons and one thing to try, and topics not tried yet.
+export const RECENT_DAYS = 14;
+
+export const STRUGGLE_PCT = 70; // under this many percent right the first time counts as a struggle
+
+export const STRONG_PCT = 80;
+
+export const ENOUGH = 8; // questions before a topic's overall percent counts
+
+export const ENOUGH_RECENT = 5;
+
+export function progressSummary(p, now = Date.now()) {
+  const since = now - RECENT_DAYS * 86400000;
+  const recent = {};
+  const older = {};
+  const tests = {};
+  for (const h of p.history) {
+    if (!h.byTopic) continue;
+    for (const [id, [asked, first]] of Object.entries(h.byTopic)) {
+      for (const bucket of [h.t >= since ? recent : older, ...(h.topic === 'test' ? [tests] : [])]) {
+        bucket[id] ??= { asked: 0, first: 0 };
+        bucket[id].asked += asked;
+        bucket[id].first += first;
+      }
+    }
+  }
+  const rows = coreTopics(p.grade).map((topic) => {
+    const s = p.stats[topic.id];
+    const r = recent[topic.id];
+    const o = older[topic.id];
+    const t = tests[topic.id];
+    const row = {
+      topic,
+      asked: s?.asked ?? 0,
+      pct: s?.asked ? pctOf(s.firstTry, s.asked) : null,
+      recentPct: r?.asked >= ENOUGH_RECENT ? pctOf(r.first, r.asked) : null,
+      olderPct: o?.asked >= ENOUGH_RECENT ? pctOf(o.first, o.asked) : null,
+      testPct: t?.asked ? pctOf(t.first, t.asked) : null,
+      testAsked: t?.asked ?? 0,
+      reasons: [],
+      focus: p.focus.includes(topic.id),
+    };
+    // An old low score doesn't count once the last two weeks are going well.
+    const fineLately = row.recentPct !== null && row.recentPct >= STRUGGLE_PCT;
+    if (row.asked >= ENOUGH && row.pct < STRUGGLE_PCT && !fineLately) row.reasons.push({ kind: 'tricky', text: `${row.pct}% right the first time (${s.firstTry} of ${s.asked})` });
+    if (row.recentPct !== null && row.recentPct < STRUGGLE_PCT && !(row.asked >= ENOUGH && row.pct < STRUGGLE_PCT && row.recentPct >= row.pct)) {
+      row.reasons.push({ kind: 'recent', text: `${row.recentPct}% in the last ${RECENT_DAYS} days` });
+    }
+    if (row.testAsked >= 3 && row.testPct < STRUGGLE_PCT) row.reasons.push({ kind: 'test', text: `${row.testPct}% on Unit Tests (no hints)` });
+    if (row.asked >= ENOUGH && s.hinted / s.asked >= 0.5) row.reasons.push({ kind: 'hints', text: `uses hints on ${pctOf(s.hinted, s.asked)}% of questions` });
+    if (s?.whyAsked >= 3 && s.whyRight / s.whyAsked < 0.6) row.reasons.push({ kind: 'explain', text: `picks the right explanation ${s.whyRight} of ${s.whyAsked} times` });
+    row.improving = row.recentPct !== null && row.olderPct !== null && row.recentPct - row.olderPct >= 15;
+    row.tip = tipFor(row);
+    return row;
+  });
+  const played = rows.filter((r) => r.asked);
+  const score = (r) => Math.min(r.pct ?? 100, r.recentPct ?? 100, r.testPct ?? 100);
+  const struggling = rows.filter((r) => r.reasons.some((x) => ['tricky', 'recent', 'test'].includes(x.kind)) || r.reasons.length >= 2)
+    .sort((a, b) => score(a) - score(b) || b.reasons.length - a.reasons.length);
+  const watch = rows.filter((r) => r.reasons.length && !struggling.includes(r));
+  const strong = rows.filter((r) => r.asked >= ENOUGH && r.pct >= STRONG_PCT && !r.reasons.length).sort((a, b) => b.pct - a.pct);
+  const improving = rows.filter((r) => r.improving && !struggling.includes(r));
+  const total = played.reduce((n, r) => n + r.asked, 0);
+  const first = played.reduce((n, r) => n + p.stats[r.topic.id].firstTry, 0);
+  const sum = (bucket) => Object.entries(bucket).filter(([id]) => rows.some((r) => r.topic.id === id))
+    .reduce((acc, [, v]) => [acc[0] + v.asked, acc[1] + v.first], [0, 0]);
+  const [recentAsked, recentFirst] = sum(recent);
+  const lastTest = p.history.find((h) => h.topic === 'test');
+  return {
+    rows, struggling, watch, strong, improving,
+    judged: rows.filter((r) => r.asked >= ENOUGH || r.recentPct !== null || r.testAsked >= 3).length,
+    notTried: rows.filter((r) => !r.asked).map((r) => r.topic),
+    overall: { asked: total, pct: total ? pctOf(first, total) : null, topics: played.length, of: rows.length },
+    recent: { asked: recentAsked, pct: recentAsked >= ENOUGH_RECENT ? pctOf(recentFirst, recentAsked) : null },
+    lastTest: lastTest ? { unit: lastTest.unit, pct: pctOf(lastTest.firstTry, lastTest.total), t: lastTest.t, level: lastTest.level } : null,
+  };
+}
+
+// One thing to try, for the main reason a topic is hard.
+function tipFor(row) {
+  const kinds = row.reasons.map((r) => r.kind);
+  const name = row.topic.name;
+  if (kinds.includes('test') && row.pct >= STRUGGLE_PCT) return `Does well with hints but not without them. Practice ${name} without opening 💡, then try the Unit Test again.`;
+  if (kinds.includes('tricky') || kinds.includes('test')) return `Practice ${name} together on 🌱 Easy. Open the 💡 steps and ask “What would you do next?” before each one.`;
+  if (kinds.includes('recent')) return `${name} has slipped lately. A couple of short ${name} quests this week should bring it back.`;
+  if (kinds.includes('hints')) return `Before tapping 💡, ask what the first step might be.`;
+  if (kinds.includes('explain')) return `At homework time, ask “How do you know?” and let them talk it through before you help.`;
+  return '';
+}
