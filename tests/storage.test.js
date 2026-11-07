@@ -16,6 +16,7 @@ test('a fresh start has two players', () => {
   const s = loadState();
   assert.equal(s.profiles.length, 2);
   assert.equal(s.pin, '');
+  assert.deepEqual(s.grownups, []);
 });
 
 test('an old save gets new fields without losing progress', () => {

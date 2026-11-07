@@ -178,7 +178,7 @@ export function renderTopics() {
     ? `🤝 Your team reached the goal! Everyone got ${TEAM_BONUS} coins${state.teamWins === 1 ? ', and the 🏰 Family Fort theme is in the shop' : ''}. Teamwork!`
     : newFocus.length
     ? `Your grown-up thinks we should practice ${listNames(newFocus.map((t) => `${t.emoji} ${t.name}`))} together! Let's be a team. 🤝 Look for the ⭐ Focus ${newFocus.length > 1 ? 'cards' : 'card'}.`
-    : p.message ? `Hi ${p.name}! A note from your grown-up: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
+    : p.message ? `Hi ${p.name}! A note from ${esc(p.messageFrom || 'your grown-up')}: “${p.message}”` : `Hi ${p.name}! Pick a quest!`;
   if (newFocus.length) {
     p.focusSeen.push(...newFocus.map((t) => t.id));
     save();

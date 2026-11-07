@@ -64,7 +64,8 @@ function normalizeProfile(p) {
 function defaultState() {
   return {
     sound: true,
-    pin: '', // optional grown-up PIN
+    pin: '', // an old 4-digit grown-up PIN (becomes a login the first time it's used)
+    grownups: [], // grown-up logins: { id, name, salt, hash } (see accounts.js)
     currentId: null,
     profiles: [makeProfile('Player 1', 4, '🦊'), makeProfile('Player 2', 2, '🐼')],
   };

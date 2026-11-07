@@ -1,4 +1,4 @@
-// The Grown-ups page: PIN, progress, settings, weekly report and backup.
+// The Grown-ups page: grown-up logins, progress, settings, weekly report and backup.
 
 import { LEVELS } from './problems.js';
 import { saveState } from './storage.js';
@@ -9,30 +9,158 @@ import { app, show, applyLook, on } from './ui.js';
 import { setFeedback } from './play.js';
 import { minutes } from './speedround.js';
 import { renderHome } from './home.js';
+import { PASSCODE_MIN, TRIES_BEFORE_WAIT, WAIT_SECONDS, checkNew, checkPasscode, addGrownup, changePasscode, removeGrownup, logIn, loginsOn } from './accounts.js';
+
+// The grown-up who logged in. Leaving the Grown-ups page logs out, so a kid
+// picking up the tablet afterwards can't get back in.
+export let signedIn = null;
+
+export function logOut() {
+  signedIn = null;
+}
+
+const login = { tries: 0, waitUntil: 0 };
+
+const showMsg = (id, kind, text) => {
+  const el = app.querySelector(`#${id}`);
+  if (!el) return;
+  el.className = `feedback ${kind}`;
+  el.textContent = text;
+};
+
+const leave = () => {
+  logOut();
+  renderHome();
+};
 
 export function renderParentGate() {
-  if (!state.pin) return renderParents();
+  if (!loginsOn(state) || signedIn) return renderParents();
+  // An old 4-digit PIN from before logins: it becomes the passcode for "Grown-up".
+  const legacy = !state.grownups?.length && state.pin;
   show(`
     <div class="screen">
       <div class="topbar"><button class="icon-btn" data-action="back" aria-label="Back">←</button></div>
-      <div class="panel">
+      <div class="panel login">
         <h2>👪 Grown-ups only</h2>
-        <label class="field-label" for="pin">Enter your PIN</label>
-        <input id="pin" class="text-input pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
-        <div class="feedback" id="feedback"></div>
-        <div class="panel-actions"><button class="btn" data-action="open">Open</button></div>
+        ${legacy ? `
+          <label class="field-label" for="pin">Enter your PIN</label>
+          <input id="pin" class="text-input pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />` : `
+          <label class="field-label" for="user">Username</label>
+          <input id="user" class="text-input" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" />
+          <label class="field-label" for="pass">Passcode</label>
+          <input id="pass" class="text-input" type="password" autocomplete="current-password" />`}
+        <div class="feedback" id="loginFeedback"></div>
+        <div class="panel-actions"><button class="btn" data-action="open">Log in</button></div>
+        <p class="panel-note small-note">Forgot it? Another grown-up can log in and set up your login again.</p>
       </div>
     </div>`);
-  const input = app.querySelector('#pin');
-  const tryPin = () => {
-    if (input.value === state.pin) return renderParents();
-    setFeedback('try', "That PIN doesn't match.");
-    input.value = '';
+  const fields = [...app.querySelectorAll('.login input')];
+  const tryLogin = async () => {
+    const wait = Math.ceil((login.waitUntil - Date.now()) / 1000);
+    if (wait > 0) return showMsg('loginFeedback', 'try', `Too many tries. Wait ${wait} seconds.`);
+    let g = null;
+    if (legacy) {
+      const pin = app.querySelector('#pin').value;
+      if (pin === state.pin) {
+        g = await addGrownup(state, 'Grown-up', pin);
+        state.pin = '';
+        save();
+        login.converted = true;
+      }
+    } else g = await logIn(state, app.querySelector('#user').value, app.querySelector('#pass').value);
+    if (g) {
+      signedIn = g;
+      login.tries = 0;
+      return renderParents();
+    }
+    if (++login.tries >= TRIES_BEFORE_WAIT) {
+      login.tries = 0;
+      login.waitUntil = Date.now() + WAIT_SECONDS * 1000;
+    }
+    showMsg('loginFeedback', 'try', legacy ? "That PIN doesn't match." : "That username and passcode don't match.");
+    app.querySelector(legacy ? '#pin' : '#pass').value = '';
   };
-  input.focus();
-  input.addEventListener('keydown', (e) => e.key === 'Enter' && tryPin());
+  fields[0].focus();
+  fields.forEach((el) => el.addEventListener('keydown', (e) => e.key === 'Enter' && tryLogin()));
   on('[data-action="back"]', renderHome);
-  on('[data-action="open"]', tryPin);
+  on('[data-action="open"]', tryLogin);
+}
+
+// The 🔒 Grown-up logins panel.
+function loginsPanel() {
+  const list = state.grownups ?? [];
+  const me = signedIn?.id;
+  const rows = list.map((g) => `
+    <div class="review-row grownup-row">
+      <span>👤 <strong>${esc(g.name)}</strong>${g.id === me ? ' (you)' : ''}</span>
+      <span>${g.id === me
+        ? '<button class="link-btn" data-action="showChange">Change my passcode</button>'
+        : `<button class="link-btn danger-link" data-remove="${g.id}">Remove</button>`}</span>
+    </div>`).join('');
+  const newFields = (prefix, withName) => `
+    ${withName ? `<label class="field-label" for="${prefix}User">Username</label>
+    <input id="${prefix}User" class="text-input" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Like Mom or Dad" />` : ''}
+    <label class="field-label" for="${prefix}Pass">${withName ? 'Passcode' : 'New passcode'} (at least ${PASSCODE_MIN} characters)</label>
+    <input id="${prefix}Pass" class="text-input" type="password" autocomplete="new-password" />
+    <label class="field-label" for="${prefix}Again">Type it again</label>
+    <input id="${prefix}Again" class="text-input" type="password" autocomplete="new-password" />`;
+  return `
+    <div class="panel" id="logins">
+      <h2>🔒 Grown-up logins</h2>
+      ${login.converted ? `<p class="panel-note"><strong>Your old PIN is now the passcode for the username “Grown-up”.</strong> Add a login for each grown-up below, then remove “Grown-up” if you like.</p>` : ''}
+      <p class="panel-note">${list.length
+        ? 'Each grown-up logs in with a username and passcode to open this page. Leaving the page logs out.'
+        : 'Right now anyone can open this page. Add a login for each grown-up so kids can’t.'}
+        Logins are saved on this device (and in backup files). Passcodes are stored scrambled, so no one can read them.</p>
+      ${rows ? `<div class="review">${rows}</div>` : ''}
+      <div class="login-form hidden" id="changeForm">
+        <h3>Change my passcode</h3>
+        ${newFields('change', false)}
+        <div class="panel-actions"><button class="btn" data-action="savePass">Save passcode</button></div>
+      </div>
+      <h3>${list.length ? 'Add another grown-up' : 'Add a grown-up'}</h3>
+      <div class="login-form">
+        ${newFields('new', true)}
+        <div class="panel-actions"><button class="btn" data-action="addGrownup">Add login</button></div>
+      </div>
+      <div class="feedback" id="loginsFeedback"></div>
+      ${list.length ? '<p class="panel-note small-note">Forgot a passcode? Another grown-up can remove that login and add it again. If no one remembers, restore a backup from before the logins were added, or clear this site’s data in the browser (that also erases progress).</p>' : ''}
+    </div>`;
+}
+
+function bindLogins(p) {
+  const val = (id) => app.querySelector(`#${id}`).value;
+  const redraw = (kind, text) => {
+    const y = window.scrollY;
+    renderParents(p.id);
+    window.scrollTo(0, y);
+    showMsg('loginsFeedback', kind, text);
+  };
+  on('[data-action="showChange"]', () => app.querySelector('#changeForm').classList.toggle('hidden'));
+  on('[data-action="savePass"]', async () => {
+    const problem = checkPasscode(val('changePass'), val('changeAgain'));
+    if (problem) return showMsg('loginsFeedback', 'try', problem);
+    await changePasscode(signedIn, val('changePass'));
+    save();
+    redraw('good', '✓ Passcode changed');
+  });
+  on('[data-action="addGrownup"]', async () => {
+    const problem = checkNew(state, val('newUser'), val('newPass'), val('newAgain'));
+    if (problem) return showMsg('loginsFeedback', 'try', problem);
+    const first = !state.grownups?.length;
+    const g = await addGrownup(state, val('newUser'), val('newPass'));
+    state.pin = '';
+    if (first) signedIn = g; // the first login is whoever is here now
+    save();
+    redraw('good', `✓ Added ${g.name}.${first ? ' Next time, log in to open this page.' : ''}`);
+  });
+  on('[data-remove]', (el) => {
+    const g = state.grownups.find((x) => x.id === el.dataset.remove);
+    if (!g || !confirm(`Remove the login for ${g.name}? They won't be able to open this page.`)) return;
+    removeGrownup(state, g.id);
+    save();
+    redraw('good', `✓ Removed ${g.name}`);
+  });
 }
 
 export function ago(t) {
@@ -43,6 +171,7 @@ export function ago(t) {
 export const GOALS = [0, 3, 5, 7, 10];
 
 export function renderParents(childId = state.currentId) {
+  if (loginsOn(state) && !signedIn) return renderParentGate();
   applyLook(null);
   const p = state.profiles.find((k) => k.id === childId) ?? state.profiles[0];
   const first = p.name;
@@ -104,6 +233,7 @@ export function renderParents(childId = state.currentId) {
       <div class="topbar">
         <button class="icon-btn" data-action="back" aria-label="Back">←</button>
         <div class="who"><strong>👪 Grown-ups</strong></div>
+        ${signedIn ? `<span class="signed-in">👤 ${esc(signedIn.name)}</span><button class="btn secondary small" data-action="logout">Log out</button>` : ''}
       </div>
       <div class="tabs" role="tablist">
         ${state.profiles.map((k) => `<button class="tab ${k.id === p.id ? 'selected' : ''}" data-child="${k.id}" role="tab">${k.avatar} ${esc(k.name)}</button>`).join('')}
@@ -202,19 +332,12 @@ export function renderParents(childId = state.currentId) {
         <div class="feedback" id="backupFeedback"></div>
       </div>
 
-      <div class="panel">
-        <h2>🔒 Grown-up PIN</h2>
-        <p class="panel-note">${state.pin ? 'A PIN is set, so kids need it to open this page.' : 'Add a 4-digit PIN so kids can’t open this page.'}</p>
-        <div class="pin-row">
-          <input id="newPin" class="text-input pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off" />
-          <button class="btn" data-action="setPin">${state.pin ? 'Change PIN' : 'Set PIN'}</button>
-          ${state.pin ? '<button class="btn danger" data-action="clearPin">Remove</button>' : ''}
-        </div>
-        <div class="feedback" id="feedback"></div>
-      </div>
+      ${loginsPanel()}
     </div>`);
 
-  on('[data-action="back"]', renderHome);
+  on('[data-action="back"]', leave);
+  on('[data-action="logout"]', leave);
+  bindLogins(p);
   on('[data-child]', (el) => renderParents(el.dataset.child));
   on('[data-action="report"]', () => renderReport(p.id));
   on('[data-focus-add]', (el) => {
@@ -254,16 +377,9 @@ export function renderParents(childId = state.currentId) {
   const note = app.querySelector('#note');
   note.addEventListener('input', () => {
     p.message = note.value.trim();
+    p.messageFrom = signedIn?.name ?? '';
     save();
     app.querySelector('#noteSaved').classList.remove('hidden');
-  });
-  on('[data-action="setPin"]', () => {
-    const value = app.querySelector('#newPin').value;
-    if (!/^\d{4}$/.test(value)) return setFeedback('try', 'Use exactly 4 digits.');
-    state.pin = value;
-    save();
-    renderParents(p.id);
-    setFeedback('good', '✓ PIN saved');
   });
   on('[data-action="backup"]', () => {
     downloadBackup();
@@ -272,11 +388,6 @@ export function renderParents(childId = state.currentId) {
   app.querySelector('#restoreFile').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) restoreBackup(file, p.id);
-  });
-  on('[data-action="clearPin"]', () => {
-    state.pin = '';
-    save();
-    renderParents(p.id);
   });
 }
 
@@ -322,6 +433,7 @@ export function howItsGoing(p) {
 }
 
 export function renderReport(childId, weeksAgo = 0) {
+  if (loginsOn(state) && !signedIn) return renderParentGate();
   applyLook(null);
   const p = state.profiles.find((k) => k.id === childId) ?? state.profiles[0];
   const name = esc(p.name);
@@ -472,10 +584,13 @@ export async function restoreBackup(file, childId) {
   saveState(incoming);
   reloadState();
   sounds.enabled = state.sound;
+  // The restored file has its own logins: stay logged in only if yours is in it.
+  signedIn = state.grownups?.find((g) => g.id === signedIn?.id) ?? null;
   state.lastBackup ??= data.saved;
   save();
   renderParents(state.profiles.some((k) => k.id === childId) ? childId : state.profiles[0].id);
   const el = app.querySelector('#backupFeedback');
+  if (!el) return; // logged out by the restore: the login screen shows instead
   el.className = 'feedback good';
   el.textContent = `✓ Restored ${names}`;
 }
