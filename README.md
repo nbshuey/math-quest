@@ -74,6 +74,32 @@ Progress is saved per address, so keep using the same port (8000) to keep the ki
 
 The Mac must be on and running `serve.py` for the iPad to load the game.
 
+## Family accounts (optional)
+
+With family accounts on, each family signs up with an email and password, and its players and
+progress are saved online, so they can play on any device. Each family sees only its own players.
+It uses a free Google Firebase project (Authentication + Cloud Firestore) through Google's web
+APIs, with no SDK. Until `js/cloudconfig.js` has a project, the game works on each device only,
+as before.
+
+To turn it on:
+
+1. At https://console.firebase.google.com, add a project (Google Analytics can be off).
+2. **Authentication** → Get started → Sign-in method → **Email/Password** → Enable.
+3. **Firestore Database** → Create database → pick a location → start in **production mode**.
+4. Firestore → **Rules** → replace everything with the contents of `firestore.rules` → Publish.
+5. Project settings (gear) → General → set the **public-facing name** to Math Quest (it shows in
+   password-reset emails). Under Your apps, add a **Web app** (no hosting), and copy `apiKey`
+   and `projectId` into `js/cloudconfig.js`.
+6. Recommended: in Google Cloud console → APIs & Services → Credentials, give the browser key
+   **website restrictions** for `https://nbshuey.github.io/*` and `http://localhost:8000/*`.
+
+The two values in `js/cloudconfig.js` are safe to publish; the rules keep each family's data
+private. How syncing works: this device's copy stays the one the game plays with (so it works
+offline); changes go online a moment after each save, and come back down on the home and quest
+screens. Each player is its own document, so two kids playing on two tablets don't clash; if the
+same player changes on two devices while apart, the newer change wins.
+
 ## Project layout
 
 ```

@@ -145,7 +145,7 @@ test('the weekly report splits Mixed rounds into their topics', () => {
     round({ topic: 'mixed', firstTry: 7, byTopic: { decimals: [4, 3], angles: [6, 4] } }),
     round({ topic: 'warmup', firstTry: 4, total: 5, byTopic: { decimals: [5, 4] } }),
     round({ topic: 'speed', speed: 18, seconds: 60, wrong: 2 }),
-    round({ t: Date.now() - 8 * 86400000 }), // last week
+    round({ t: weekStart(1) + 3600000 }), // last week (an hour after it started)
   ];
   const w = R.weekSummary(kid, 0);
   assert.equal(w.goalCount, 2, 'warm-ups are not quests');

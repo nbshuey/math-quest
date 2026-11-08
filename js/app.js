@@ -6,6 +6,8 @@ import { app } from './ui.js';
 import { session, nextQuestion, pressKey } from './play.js';
 import { speed, speedKey } from './speedround.js';
 import { renderHome } from './home.js';
+import { cloudOn, session as cloudSession, localOnly } from './cloud.js';
+import { renderWelcome, startCloud } from './familyscreen.js';
 
 sounds.enabled = state.sound;
 
@@ -30,7 +32,10 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Enter') pressKey('enter');
 });
 
-renderHome();
+// ☁️ With family accounts on, a new device asks to log in (or play on this device only).
+if (cloudOn() && !cloudSession() && !localOnly()) renderWelcome();
+else renderHome();
+startCloud();
 
 // Offline support on the hosted (https) site. On http://localhost the browser just loads files.
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

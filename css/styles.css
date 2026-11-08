@@ -1020,3 +1020,15 @@ body.easy-read .tell-starter { font-weight: 600; letter-spacing: 0.04em; }
 .grownup-row { align-items: center; }
 .grownup-row .link-btn { margin-top: 0; }
 .danger-link { color: var(--bad); }
+
+/* ☁️ Family accounts */
+.cloud-line { text-align: center; color: var(--on-bg-muted); font-size: 0.95rem; margin: -14px 0 18px; }
+.panel .cloud-line { margin: 8px 0; text-align: left; }
+.cloud-line .link-btn { margin-top: 0; padding: 0 4px; }
+.welcome-actions { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.privacy-box, .danger-box { margin-top: 14px; text-align: left; }
+.privacy-box summary, .danger-box summary { cursor: pointer; font-weight: 700; }
+.danger-box summary { color: var(--bad); }
+.privacy { padding-left: 20px; margin: 8px 0; }
+.privacy li { margin: 6px 0; }
+.login .toggle-opt { margin-top: 14px; width: 100%; }

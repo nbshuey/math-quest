@@ -12,6 +12,7 @@ import { testCard, renderTestIntro } from './unittest.js';
 import { renderShop, renderStickers } from './shopscreen.js';
 import { renderParentGate } from './parents.js';
 import { makeProfile } from './storage.js';
+import { cloudLine, bindCloudLine } from './familyscreen.js';
 
 export function renderHome() {
   setSession(null);
@@ -34,6 +35,7 @@ export function renderHome() {
       <div class="topbar"><span class="spacer"></span><button class="btn secondary small" data-action="parents">👪 Grown-ups</button>${soundButton()}</div>
       <h1 class="title">Math Quest</h1>
       <p class="subtitle">Who's playing today?</p>
+      ${cloudLine()}
       <div class="profiles">
         ${cards}
         <button class="profile-card add-card" data-action="add"><div class="avatar">＋</div><div>Add player</div></button>
@@ -41,6 +43,7 @@ export function renderHome() {
     </div>`);
 
   bindSound();
+  bindCloudLine();
   on('[data-id]', (el, e) => {
     if (e.target.closest('[data-edit]')) return;
     state.currentId = el.dataset.id;

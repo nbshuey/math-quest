@@ -9,6 +9,7 @@ import { app, show, applyLook, on } from './ui.js';
 import { setFeedback } from './play.js';
 import { minutes } from './speedround.js';
 import { renderHome } from './home.js';
+import { accountPanel, bindAccount } from './familyscreen.js';
 import { PASSCODE_MIN, TRIES_BEFORE_WAIT, WAIT_SECONDS, checkNew, checkPasscode, addGrownup, changePasscode, removeGrownup, logIn, loginsOn } from './accounts.js';
 
 // The grown-up who logged in. Leaving the Grown-ups page logs out, so a kid
@@ -319,6 +320,8 @@ export function renderParents(childId = state.currentId) {
         ${recent ? `<div class="review">${recent}</div>` : `<p class="panel-note">No quests yet.</p>`}
       </div>
 
+      ${accountPanel()}
+
       <div class="panel">
         <h2>💾 Backup</h2>
         <p class="panel-note">Progress is saved only in this browser. Clearing the browser's data, or using another device, starts over.
@@ -338,6 +341,7 @@ export function renderParents(childId = state.currentId) {
   on('[data-action="back"]', leave);
   on('[data-action="logout"]', leave);
   bindLogins(p);
+  bindAccount(logOut);
   on('[data-child]', (el) => renderParents(el.dataset.child));
   on('[data-action="report"]', () => renderReport(p.id));
   on('[data-focus-add]', (el) => {

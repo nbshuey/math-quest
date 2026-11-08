@@ -68,3 +68,13 @@ for (const f of files) {
     assert.deepEqual(missing, []);
   });
 }
+
+// Every file must at least load: a name imported twice (or a typo) stops the whole game.
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+for (const f of files) {
+  test(`${f} has no syntax errors`, () => {
+    const r = spawnSync(process.execPath, ['--check', fileURLToPath(new URL(f, DIR))], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+  });
+}

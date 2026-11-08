@@ -24,7 +24,13 @@ export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-export const save = () => saveState(state);
+// Called after every save (family accounts use it to save online too).
+export const afterSave = [];
+
+export const save = () => {
+  saveState(state);
+  for (const fn of afterSave) fn();
+};
 
 export const currentProfile = () => state.profiles.find((p) => p.id === state.currentId);
 

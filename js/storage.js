@@ -10,7 +10,7 @@ export function makeProfile(name, grade, avatar) {
 }
 
 // Fills in fields added in later versions so older saves keep working.
-function normalizeProfile(p) {
+export function normalizeProfile(p) {
   const out = {
     coins: 0,
     best: {},
@@ -61,7 +61,7 @@ function normalizeProfile(p) {
   return out;
 }
 
-function defaultState() {
+export function defaultState() {
   return {
     sound: true,
     pin: '', // an old 4-digit grown-up PIN (becomes a login the first time it's used)

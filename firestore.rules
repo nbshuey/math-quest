@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Math Quest family accounts: each family (one Firebase sign-in) can read and write only
+// its own data, under families/{its own user id}. Nothing else can be read or written.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The family's settings (grown-up logins, team goal) and each player.
+    match /families/{familyId} {
+      allow read, delete: if signedInAs(familyId);
+      allow create, update: if signedInAs(familyId) && smallEnough();
+
+      match /kids/{kidId} {
+        allow read, delete: if signedInAs(familyId);
+        allow create, update: if signedInAs(familyId) && smallEnough();
+      }
+    }
+
+    function signedInAs(familyId) {
+      return request.auth != null && request.auth.uid == familyId;
+    }
+
+    // Each document is one JSON text field plus a time; keep it well under Firestore's 1 MB.
+    function smallEnough() {
+      return request.resource.data.keys().hasOnly(['data', 'changed'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 900000;
+    }
+  }
+}
